@@ -1,0 +1,9 @@
+<Application x:Class="ITforceMarkdown.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- 全局资源 / 主题 / 字典在这里挂. 后续 spec 里的设计令牌
+             (颜色、字号、border thickness) 都会变成这里的 ResourceDictionary. -->
+    </Application.Resources>
+</Application>

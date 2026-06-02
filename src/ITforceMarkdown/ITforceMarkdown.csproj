@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- WPF App, .NET 8 (LTS), Windows-only target -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>ITforceMarkdown</RootNamespace>
+    <AssemblyName>ITforceMarkdown</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- 版本号: GitHub Actions 在 release 时会通过 /p:Version=... 覆盖。 -->
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+
+    <!-- self-contained single-file publish 默认参数, CI 里能直接 dotnet publish。 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 内嵌 Chromium 渲染 Markdown 预览 (跟 Mac 版 WKWebView 对位). -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+
+    <!-- Markdown 解析器, .NET 圈最成熟的实现, CommonMark + GFM 扩展齐全. -->
+    <PackageReference Include="Markdig" Version="0.37.0" />
+  </ItemGroup>
+
+</Project>

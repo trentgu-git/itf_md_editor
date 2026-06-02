@@ -1,0 +1,62 @@
+# ============================================================================
+# .NET build outputs
+# ============================================================================
+bin/
+obj/
+publish/
+out/
+*.user
+*.suo
+
+# Visual Studio
+.vs/
+*.userprefs
+*.usertasks
+
+# JetBrains Rider
+.idea/
+
+# VS Code (keep .vscode/launch.json / tasks.json if useful, opt-in)
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Test results
+TestResults/
+*.trx
+coverage.*.xml
+coverage.cobertura.xml
+
+# Rider / VS local cache
+_ReSharper*/
+*.dotCover
+*.suo
+
+# Windows files
+Thumbs.db
+Desktop.ini
+
+# macOS files (we're authoring on macOS so these will appear)
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Logs
+*.log
+
+# CI / Actions local debugging
+.act/
+
+# Generated MSIX
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.appxupload

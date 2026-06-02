@@ -1,0 +1,36 @@
+<Window x:Class="ITforceMarkdown.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ITforce Markdown (Windows)"
+        Width="1240"
+        Height="760"
+        MinWidth="900"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+
+    <!--
+        临时骨架页面 — 仅证明编译 + 启动 + 窗口能起来。
+        别的 AI 拿到这个项目后, 按 WINDOWS_PORT_SPEC.md 把这里替换成
+        Grid(Sidebar + TopActionBar + DocumentWorkspace) 三栏布局即可。
+    -->
+    <Grid Background="#F7F7F8">
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+            <TextBlock Text="ITforce Markdown — Windows port"
+                       FontSize="24"
+                       FontWeight="SemiBold"
+                       Foreground="#1F2937"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="Skeleton 0.1.0 — build pipeline OK"
+                       FontSize="13"
+                       Foreground="#6B7280"
+                       HorizontalAlignment="Center"
+                       Margin="0,12,0,0" />
+            <TextBlock x:Name="StatusText"
+                       FontSize="11"
+                       Foreground="#9CA3AF"
+                       HorizontalAlignment="Center"
+                       Margin="0,24,0,0" />
+        </StackPanel>
+    </Grid>
+</Window>
