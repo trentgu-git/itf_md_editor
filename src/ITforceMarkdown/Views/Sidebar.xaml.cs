@@ -40,6 +40,11 @@ public partial class Sidebar : UserControl
         {
             case nameof(WorkspaceStore.SelectedFile):
             case nameof(WorkspaceStore.SearchText):
+            // ToggleWorkspaceExpanded / ToggleWorkspaceHideEmpty 改了 ws 内部状态
+            // 后会 OnPropertyChanged(nameof(LocalWorkspaces)) — 我们必须在这里
+            // 重建, 否则灯泡 / chevron / 过滤后的文件列表都不更新。
+            case nameof(WorkspaceStore.LocalWorkspaces):
+            case nameof(WorkspaceStore.WorkspaceTrees):
                 Dispatcher.BeginInvoke(new Action(Rebuild));
                 break;
         }
