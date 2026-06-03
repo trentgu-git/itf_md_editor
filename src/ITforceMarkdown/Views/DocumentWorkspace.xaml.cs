@@ -22,7 +22,8 @@ public partial class DocumentWorkspace : UserControl
         Loaded += (_, _) =>
         {
             Store.PropertyChanged += OnStoreChanged;
-            Sync();
+            UpdateContent();
+            UpdateHeader();
         };
         Unloaded += (_, _) => Store.PropertyChanged -= OnStoreChanged;
     }
@@ -31,10 +32,16 @@ public partial class DocumentWorkspace : UserControl
     {
         switch (e.PropertyName)
         {
+            // ⚠️ 只有"文件切换"或"显示模式切换"这两种情况才能动 ContentHost.
+            // 如果在 IsDirty 也走 UpdateContent, 每个 keystroke 都会 detach 再 attach
+            // WebView2 控件, 光标位置丢失, 用户感觉是"body 编辑不了"。
             case nameof(WorkspaceStore.SelectedFile):
             case nameof(WorkspaceStore.EditorMode):
+                Dispatcher.BeginInvoke(new Action(() => { UpdateContent(); UpdateHeader(); }));
+                break;
+            // IsDirty 只更新标题里的圆点 + Save 按钮, 不重建视图
             case nameof(WorkspaceStore.IsDirty):
-                Dispatcher.BeginInvoke(new Action(Sync));
+                Dispatcher.BeginInvoke(new Action(UpdateHeader));
                 break;
             case nameof(WorkspaceStore.IsSidebarHidden):
                 Dispatcher.BeginInvoke(new Action(ApplyFullscreen));
@@ -62,9 +69,12 @@ public partial class DocumentWorkspace : UserControl
         }
     }
 
-    private void Sync()
+    /// <summary>
+    /// 只更新 header (title / dirty dot / button enabled / mode 高亮)。
+    /// 不触碰 ContentHost — 安全到每个 keystroke 都可以调。
+    /// </summary>
+    private void UpdateHeader()
     {
-        // 标题 + dirty
         if (Store.SelectedFile == null)
         {
             TitleLabel.Text = "No document";
@@ -80,11 +90,16 @@ public partial class DocumentWorkspace : UserControl
             BtnExportPdf.IsEnabled = BtnExportWord.IsEnabled = BtnClose.IsEnabled =
                 BtnDelete.IsEnabled = BtnDuplicate.IsEnabled = true;
         }
-
-        // mode 按钮高亮
         SetActiveMode(Store.EditorMode);
+    }
 
-        // 主体
+    /// <summary>
+    /// 重建 ContentHost 内容。**只在 SelectedFile / EditorMode 变化时调**,
+    /// 千万不要因为 IsDirty (每个 keystroke 都变) 来调, 否则 WebView 被反复
+    /// detach/attach, 光标位置丢失 → 用户感觉是"打字闪屏 / body 编辑不了"。
+    /// </summary>
+    private void UpdateContent()
+    {
         ContentHost.Children.Clear();
         if (Store.SelectedFile == null)
         {
@@ -97,19 +112,33 @@ public partial class DocumentWorkspace : UserControl
             case EditorMode.Read:
                 EditorToolbarHost.Visibility = Visibility.Collapsed;
                 _readView ??= new MarkdownPreview { IsEditable = false };
+                AttachOnce(_readView);
                 ContentHost.Children.Add(_readView);
                 break;
             case EditorMode.Rich:
                 EditorToolbarHost.Visibility = Visibility.Visible;
                 _richView ??= new MarkdownPreview { IsEditable = true };
+                AttachOnce(_richView);
                 ContentHost.Children.Add(_richView);
                 break;
             case EditorMode.Source:
                 EditorToolbarHost.Visibility = Visibility.Collapsed;
                 _sourceView ??= new SourceEditor();
+                AttachOnce(_sourceView);
                 ContentHost.Children.Add(_sourceView);
                 break;
         }
+    }
+
+    /// <summary>
+    /// 从之前的父容器里摘下来 (如果有) — 一个 UIElement 只能有一个 parent,
+    /// 我们 cache 了 _readView/_richView/_sourceView 三个实例反复用, 切换 mode 时
+    /// 必须先 detach 才能 attach 到新容器, 不然 InvalidOperationException。
+    /// </summary>
+    private static void AttachOnce(UIElement element)
+    {
+        if (element is FrameworkElement fe && fe.Parent is Panel parent)
+            parent.Children.Remove(element);
     }
 
     private FrameworkElement BuildWelcome()
