@@ -49,10 +49,8 @@ public static class Exporter
 
         try
         {
-            var userDataDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ITforceMarkdown", "WebView2Cache");
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataDir);
+            // 复用主 WebView 同一个 environment, 避免 "different environment" 报错。
+            var env = await WebView2Host.GetEnvironmentAsync();
             await wv.EnsureCoreWebView2Async(env);
 
             var html = MarkdownEngine.PrintHtml(markdown, Path.GetFileNameWithoutExtension(suggestedName),
