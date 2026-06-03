@@ -90,7 +90,9 @@
                 <TextBlock Text="❝"/>
             </Button>
             <Button Style="{StaticResource FmtButton}" ToolTip="Code block" Click="CodeBlock_Click">
-                <TextBlock Text="{ }" FontFamily="Cascadia Code, Consolas, monospace"/>
+                <!-- {}{ } : 前导 {} 是 XAML 的 "literal-text" 转义, 否则 {} 会被
+                     当成 markup extension (类似 {Binding}) 解析, MC3074 报错 -->
+                <TextBlock Text="{}{ }" FontFamily="Cascadia Code, Consolas, monospace"/>
             </Button>
 
             <Border Style="{StaticResource DividerLine}"/>
