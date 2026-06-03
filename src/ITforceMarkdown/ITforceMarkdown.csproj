@@ -39,9 +39,7 @@
     <!-- Word (.docx) 导出: 纯 OOXML 操作, 不需要 Word 装在用户机器上。 -->
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
 
-    <!-- 回收站删除 (Mac 版用 NSFileManager.trashItem 的对位).
-         Microsoft.VisualBasic 在 .NET 8 SDK 已经内置, 但要显式 reference 才能用。 -->
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+    <!-- (回收站删除走 Services/RecycleBin.cs 的 SHFileOperation P/Invoke, 零依赖) -->
   </ItemGroup>
 
   <!-- 把 Engine/Resources/ 下的 css/js 当资源嵌进 .exe, 运行时通过

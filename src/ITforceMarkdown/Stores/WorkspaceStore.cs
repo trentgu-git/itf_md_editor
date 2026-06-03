@@ -352,11 +352,11 @@ public partial class WorkspaceStore : ObservableObject
         var path = SelectedFile.Path;
         try
         {
-            // SendToRecycleBin: 可恢复, 比直接 File.Delete 安全
-            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
-                path,
-                Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
-                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+            if (!RecycleBin.Send(path))
+            {
+                ErrorMessage = $"Could not move {Path.GetFileName(path)} to Recycle Bin.";
+                return false;
+            }
 
             CloseDocument();
             // 从 recent 里剔掉
