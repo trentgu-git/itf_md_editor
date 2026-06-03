@@ -32,6 +32,7 @@ public partial class MarkdownPreview : UserControl
     private bool _wv2Ready;
     private string _lastReloadKey = "";
     private bool _isApplyingFromStore;
+    private Guid _lastScrollToken;
 
     public MarkdownPreview()
     {
@@ -85,7 +86,28 @@ public partial class MarkdownPreview : UserControl
                 if (!_isApplyingFromStore)
                     Dispatcher.BeginInvoke(new Action(async () => await ReloadAsync()));
                 break;
+            case nameof(WorkspaceStore.ScrollToken):
+                Dispatcher.BeginInvoke(new Action(async () => await ScrollToTargetAsync()));
+                break;
         }
+    }
+
+    private async Task ScrollToTargetAsync()
+    {
+        if (!_wv2Ready) return;
+        if (Store.ScrollToken == _lastScrollToken) return;
+        _lastScrollToken = Store.ScrollToken;
+        var id = Store.ScrollTargetId;
+        if (string.IsNullOrEmpty(id)) return;
+
+        // 内容可能还没渲染完, 给一点缓冲, 否则 scrollIntoView 找不到目标
+        await Task.Delay(80);
+        var escaped = id.Replace("\\", "\\\\").Replace("'", "\\'");
+        try
+        {
+            await WebView.CoreWebView2.ExecuteScriptAsync($"__scrollToHeading('{escaped}')");
+        }
+        catch { /* webview 还没 ready 时静默忽略 */ }
     }
 
     private async Task ReloadAsync()

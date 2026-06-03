@@ -98,6 +98,47 @@ public partial class WorkspaceStore : ObservableObject
     /// <summary>当前文档是否有未保存修改。</summary>
     public bool IsDirty => SelectedFile != null && SourceDraft != LastSavedSource;
 
+    // ─────────────────── Outline (TOC) ───────────────────
+
+    /// <summary>当前文档的标题列表 (跟着 SourceDraft 变化)。</summary>
+    public ObservableCollection<HeadingItem> Headings { get; } = new();
+
+    /// <summary>Outline 过滤框文字。</summary>
+    [ObservableProperty]
+    private string outlineFilter = "";
+
+    /// <summary>Outline 点击后要滚到的 heading id。MarkdownPreview 监听这个属性变化。</summary>
+    [ObservableProperty]
+    private string? scrollTargetId;
+
+    /// <summary>每次点 outline 都换一个新 token, 让 MarkdownPreview 即便目标 id
+    /// 没变也能重新触发滚动 (例如用户在 Read/Edit 之间切换后又点了同一项)。</summary>
+    [ObservableProperty]
+    private Guid scrollToken = Guid.NewGuid();
+
+    /// <summary>从外部 (Outline 按钮) 调用, 请求 webview 滚到某 heading。</summary>
+    public void RequestScrollToHeading(string id)
+    {
+        ScrollTargetId = id;
+        ScrollToken = Guid.NewGuid();
+    }
+
+    private void RefreshHeadings()
+    {
+        try
+        {
+            var newH = Engine.MarkdownEngine.ParseHeadings(SourceDraft);
+            // 注意: 不能 just Clear + Add 一堆 — UI 会闪烁。用增量更新更顺滑,
+            // 但简单起见这里先 Clear+Add, 数量通常 <50, 不会卡。
+            Headings.Clear();
+            foreach (var h in newH) Headings.Add(h);
+        }
+        catch
+        {
+            Headings.Clear();
+        }
+    }
+
     // ─────────────────── 内部 ───────────────────
     private bool _isNavigatingHistory;
 
@@ -152,10 +193,16 @@ public partial class WorkspaceStore : ObservableObject
             PersistenceService.SaveString(KeyLastFile, newValue.Path);
         else
             PersistenceService.Delete(KeyLastFile);
+        // 切文件时清掉 outline 过滤词, 否则用户看新文档目录会被旧 filter 截掉
+        OutlineFilter = "";
+        RefreshHeadings();
     }
 
     partial void OnSourceDraftChanged(string value)
-        => OnPropertyChanged(nameof(IsDirty));
+    {
+        OnPropertyChanged(nameof(IsDirty));
+        RefreshHeadings();
+    }
 
     partial void OnLastSavedSourceChanged(string value)
         => OnPropertyChanged(nameof(IsDirty));

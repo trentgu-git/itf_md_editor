@@ -88,8 +88,24 @@
             </DockPanel>
         </Border>
 
-        <!-- 内容: 根据 Store.EditorMode 切换 -->
-        <Grid Grid.Row="1" x:Name="ContentHost"/>
+        <!-- 内容: 左侧 Outline + 右侧文档主体 -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="OutlineCol" Width="240" MinWidth="180" MaxWidth="360"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*" MinWidth="400"/>
+            </Grid.ColumnDefinitions>
+
+            <views:Outline Grid.Column="0"/>
+
+            <GridSplitter Grid.Column="1"
+                          HorizontalAlignment="Stretch"
+                          Background="{DynamicResource Brush.Line}"
+                          ResizeBehavior="PreviousAndNext"/>
+
+            <!-- 文档主体: Read / Edit / Source 通过代码 swap 进 ContentHost -->
+            <Grid Grid.Column="2" x:Name="ContentHost"/>
+        </Grid>
 
     </Grid>
 </UserControl>
