@@ -1,0 +1,81 @@
+/*
+ * 打印 / 导出共用 CSS。MarkdownEngine.PrintHtml 把 __UNIT__ 替换成 pt 或 px。
+ *
+ * - PDF 路径: __UNIT__ = "pt", body padding=96px (WebView2 PrintToPdf 不识 @page margin)
+ * - Word 路径: __UNIT__ = "px", body padding=0 (textutil → docx 时 1px = 1 NSFont pt)
+ */
+@page { size: A4; margin: 2.54cm; }
+html {
+  margin: 0;
+  padding: 0;
+  background: white;
+}
+body {
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 10__UNIT__;
+  line-height: 1.55;
+}
+h1, h2, h3, h4, h5, h6 {
+  color: #111827;
+  page-break-after: avoid;
+  margin: 1.0em 0 0.4em;
+  line-height: 1.25;
+  font-weight: 700;
+}
+h1 { font-size: 14__UNIT__; margin-top: 0; padding-bottom: 4__UNIT__; border-bottom: 1px solid #d1d5db; }
+h2 { font-size: 12__UNIT__; }
+h3, h4, h5, h6 { font-size: 10__UNIT__; }
+p, li, blockquote { font-size: 10__UNIT__; }
+p { margin: 0 0 0.5em; }
+a { color: #1d4ed8; text-decoration: underline; }
+strong { font-weight: 700; }
+em { font-style: italic; }
+ul, ol { margin: 0 0 0.6em 1.4em; padding: 0; }
+li { margin: 0.15em 0; }
+blockquote {
+  margin: 0.6em 0;
+  padding: 0.5em 0.9em;
+  border-left: 3px solid #9ca3af;
+  background: #f3f4f6;
+  color: #374151;
+}
+code {
+  padding: 1px 4px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 9__UNIT__;
+}
+pre {
+  page-break-inside: avoid;
+  margin: 0.6em 0;
+  padding: 8__UNIT__ 10__UNIT__;
+  background: #f6f8fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 9__UNIT__;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #1f2937;
+}
+pre code { padding: 0; border: 0; background: transparent; font-size: inherit; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  page-break-inside: avoid;
+  font-size: 10__UNIT__;
+}
+th, td {
+  padding: 5__UNIT__ 8__UNIT__;
+  border: 1px solid #d1d5db;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: #f3f4f6; font-weight: 700; }
+img { max-width: 100%; height: auto; }
+hr { border: 0; border-top: 1px solid #d1d5db; margin: 1.0em 0; }

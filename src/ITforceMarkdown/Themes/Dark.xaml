@@ -1,0 +1,24 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ===== 颜色 (复刻 Mac 版 AppTheme.dark) ===== -->
+    <Color x:Key="Color.Accent">#F59B14</Color>
+    <Color x:Key="Color.Window">#1C1C1E</Color>
+    <Color x:Key="Color.Card">#2B2B2D</Color>
+    <Color x:Key="Color.Sidebar">#212123</Color>
+    <Color x:Key="Color.SidebarSectionActive">#3B3422</Color>
+    <Color x:Key="Color.SidebarSectionInactive">#2B2B2D</Color>
+    <Color x:Key="Color.SelectedFile">#523F1F</Color>
+    <Color x:Key="Color.OutlineBg">#212123</Color>
+    <Color x:Key="Color.EditorBg">#1F1F21</Color>
+    <Color x:Key="Color.Ink">#E5E7EB</Color>
+    <Color x:Key="Color.Muted">#98989D</Color>
+    <Color x:Key="Color.Placeholder">#8C8C8C</Color>
+    <Color x:Key="Color.FolderText">#9DB8E2</Color>
+    <Color x:Key="Color.FolderIcon">#F2A763</Color>
+    <Color x:Key="Color.ToolbarIcon">#D8D8DA</Color>
+    <Color x:Key="Color.Line">#3A3A3C</Color>
+    <Color x:Key="Color.SelectionInk">#FAE7B7</Color>
+    <Color x:Key="Color.ToolbarBg">#2B2B2D</Color>
+    <Color x:Key="Color.Toast">#E5E7EB</Color>
+</ResourceDictionary>

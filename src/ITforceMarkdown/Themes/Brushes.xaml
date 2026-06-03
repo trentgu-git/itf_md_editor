@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        所有 SolidColorBrush 用 DynamicResource 绑到一个 Color。
+        切主题时 ThemeManager 只换 Color 字典 (Light.xaml / Dark.xaml),
+        Brush 自动重算, 整个 UI 跟着刷新。
+    -->
+    <SolidColorBrush x:Key="Brush.Accent"                  Color="{DynamicResource Color.Accent}"/>
+    <SolidColorBrush x:Key="Brush.Window"                  Color="{DynamicResource Color.Window}"/>
+    <SolidColorBrush x:Key="Brush.Card"                    Color="{DynamicResource Color.Card}"/>
+    <SolidColorBrush x:Key="Brush.Sidebar"                 Color="{DynamicResource Color.Sidebar}"/>
+    <SolidColorBrush x:Key="Brush.SidebarSectionActive"    Color="{DynamicResource Color.SidebarSectionActive}"/>
+    <SolidColorBrush x:Key="Brush.SidebarSectionInactive"  Color="{DynamicResource Color.SidebarSectionInactive}"/>
+    <SolidColorBrush x:Key="Brush.SelectedFile"            Color="{DynamicResource Color.SelectedFile}"/>
+    <SolidColorBrush x:Key="Brush.OutlineBg"               Color="{DynamicResource Color.OutlineBg}"/>
+    <SolidColorBrush x:Key="Brush.EditorBg"                Color="{DynamicResource Color.EditorBg}"/>
+    <SolidColorBrush x:Key="Brush.Ink"                     Color="{DynamicResource Color.Ink}"/>
+    <SolidColorBrush x:Key="Brush.Muted"                   Color="{DynamicResource Color.Muted}"/>
+    <SolidColorBrush x:Key="Brush.Placeholder"             Color="{DynamicResource Color.Placeholder}"/>
+    <SolidColorBrush x:Key="Brush.FolderText"              Color="{DynamicResource Color.FolderText}"/>
+    <SolidColorBrush x:Key="Brush.FolderIcon"              Color="{DynamicResource Color.FolderIcon}"/>
+    <SolidColorBrush x:Key="Brush.ToolbarIcon"             Color="{DynamicResource Color.ToolbarIcon}"/>
+    <SolidColorBrush x:Key="Brush.Line"                    Color="{DynamicResource Color.Line}"/>
+    <SolidColorBrush x:Key="Brush.SelectionInk"            Color="{DynamicResource Color.SelectionInk}"/>
+    <SolidColorBrush x:Key="Brush.ToolbarBg"               Color="{DynamicResource Color.ToolbarBg}"/>
+    <SolidColorBrush x:Key="Brush.Toast"                   Color="{DynamicResource Color.Toast}"/>
+</ResourceDictionary>

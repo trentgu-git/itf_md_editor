@@ -10,6 +10,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <LangVersion>latest</LangVersion>
 
     <!-- 版本号: GitHub Actions 在 release 时会通过 /p:Version=... 覆盖。 -->
     <Version>0.1.0</Version>
@@ -30,6 +31,24 @@
 
     <!-- Markdown 解析器, .NET 圈最成熟的实现, CommonMark + GFM 扩展齐全. -->
     <PackageReference Include="Markdig" Version="0.37.0" />
+
+    <!-- ObservableObject + [ObservableProperty] / [RelayCommand] source generators,
+         让我们写 MVVM 像 Swift @Published 一样省事。 -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+
+    <!-- Word (.docx) 导出: 纯 OOXML 操作, 不需要 Word 装在用户机器上。 -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+
+    <!-- 回收站删除 (Mac 版用 NSFileManager.trashItem 的对位).
+         Microsoft.VisualBasic 在 .NET 8 SDK 已经内置, 但要显式 reference 才能用。 -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+  </ItemGroup>
+
+  <!-- 把 Engine/Resources/ 下的 css/js 当资源嵌进 .exe, 运行时通过
+       assembly stream 读出来, 不需要 IO. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Engine\Resources\*.css" />
+    <EmbeddedResource Include="Engine\Resources\*.js" />
   </ItemGroup>
 
 </Project>
