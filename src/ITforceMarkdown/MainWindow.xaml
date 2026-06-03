@@ -10,7 +10,8 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Brush.Window}"
         AllowDrop="True"
-        Drop="MainWindow_Drop">
+        Drop="MainWindow_Drop"
+        Icon="{x:Null}"><!-- 真正的图标在 code-behind 按 Local/Pro flavor 设, 这里仅占位 -->
 
     <Window.InputBindings>
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}"/>

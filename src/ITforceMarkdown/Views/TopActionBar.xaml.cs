@@ -11,6 +11,10 @@ public partial class TopActionBar : UserControl
     public TopActionBar()
     {
         InitializeComponent();
+        // 按 flavor 显示品牌. Pro 自动带 " PRO" 后缀 (大写)
+        BrandLabel.Text = App.IsProEdition
+            ? "ITFORCE MARKDOWN PRO"
+            : "ITFORCE MARKDOWN EDITOR";
     }
 
     private void OpenFolder_Click(object sender, System.Windows.RoutedEventArgs e)

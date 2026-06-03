@@ -1,23 +1,33 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- ============================================================
+       BuildFlavor: 切换 Local / Pro 品牌. 默认 Local;
+       CI 用 dotnet publish -p:BuildFlavor=Pro 出 Pro 版 exe.
+       Pro 版会自动:
+         - AssemblyName / Title / Product 改成 "ITforceMarkdown.Pro" / "ITforce Markdown Pro"
+         - 多定义 PRO 编译常量, 让 #if PRO 段生效
+         - 用 Pro 图标 (AppIcon.Pro.ico)
+       ============================================================ -->
   <PropertyGroup>
-    <!-- WPF App, .NET 8 (LTS), Windows-only target -->
+    <BuildFlavor Condition="'$(BuildFlavor)' == ''">Local</BuildFlavor>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>ITforceMarkdown</RootNamespace>
-    <AssemblyName>ITforceMarkdown</AssemblyName>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <LangVersion>latest</LangVersion>
 
-    <!-- 版本号: GitHub Actions 在 release 时会通过 /p:Version=... 覆盖。 -->
+    <!-- 版本号: GitHub Actions 通过 /p:Version 覆盖. -->
     <Version>0.1.0</Version>
     <AssemblyVersion>0.1.0.0</AssemblyVersion>
     <FileVersion>0.1.0.0</FileVersion>
 
-    <!-- self-contained single-file publish 默认参数, CI 里能直接 dotnet publish。 -->
+    <!-- self-contained single-file publish. -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -25,28 +35,39 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
+  <!-- Local 品牌 -->
+  <PropertyGroup Condition="'$(BuildFlavor)' == 'Local'">
+    <AssemblyName>ITforceMarkdown</AssemblyName>
+    <AssemblyTitle>ITforce Markdown</AssemblyTitle>
+    <Product>ITforce Markdown</Product>
+    <Company>ITforce</Company>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- Pro 品牌 -->
+  <PropertyGroup Condition="'$(BuildFlavor)' == 'Pro'">
+    <AssemblyName>ITforceMarkdown.Pro</AssemblyName>
+    <AssemblyTitle>ITforce Markdown Pro</AssemblyTitle>
+    <Product>ITforce Markdown Pro</Product>
+    <Company>ITforce</Company>
+    <ApplicationIcon>Assets\AppIcon.Pro.ico</ApplicationIcon>
+    <DefineConstants>$(DefineConstants);PRO</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
-    <!-- 内嵌 Chromium 渲染 Markdown 预览 (跟 Mac 版 WKWebView 对位). -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
-
-    <!-- Markdown 解析器, .NET 圈最成熟的实现, CommonMark + GFM 扩展齐全. -->
     <PackageReference Include="Markdig" Version="0.37.0" />
-
-    <!-- ObservableObject + [ObservableProperty] / [RelayCommand] source generators,
-         让我们写 MVVM 像 Swift @Published 一样省事。 -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
-
-    <!-- Word (.docx) 导出: 纯 OOXML 操作, 不需要 Word 装在用户机器上。 -->
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
-
-    <!-- (回收站删除走 Services/RecycleBin.cs 的 SHFileOperation P/Invoke, 零依赖) -->
   </ItemGroup>
 
-  <!-- 把 Engine/Resources/ 下的 css/js 当资源嵌进 .exe, 运行时通过
-       assembly stream 读出来, 不需要 IO. -->
   <ItemGroup>
     <EmbeddedResource Include="Engine\Resources\*.css" />
     <EmbeddedResource Include="Engine\Resources\*.js" />
+    <!-- 两个图标都嵌进 .exe, 让 MainWindow 在代码里按 flavor 选用,
+         Window.Icon 必须是 pack URI 资源, ApplicationIcon 是 PE 资源 (不同概念). -->
+    <Resource Include="Assets\AppIcon.ico" />
+    <Resource Include="Assets\AppIcon.Pro.ico" />
   </ItemGroup>
 
 </Project>

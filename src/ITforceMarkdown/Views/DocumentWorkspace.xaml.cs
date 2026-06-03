@@ -150,7 +150,7 @@ public partial class DocumentWorkspace : UserControl
         };
         sp.Children.Add(new TextBlock
         {
-            Text = "ITforce Markdown",
+            Text = App.ProductName,
             FontSize = 26,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)FindResource("Brush.Ink"),

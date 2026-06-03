@@ -1,13 +1,15 @@
 # 自动编译 Windows 端 .exe 的 CI pipeline。
 #
-# 触发条件:
-#   - push 到 main 分支     → 编译, 把 .exe 作为 artifact 上传 (保留 30 天)
-#   - 提交 vX.Y.Z 这种 tag  → 同时创建 GitHub Release, .exe 直接挂上去
-#   - 手动 (workflow_dispatch) → 在 Actions 页面手点 "Run workflow"
+# 每次 push 同时出 Local 和 Pro 两个版本 (matrix build):
+#   - ITforceMarkdown.exe       (Local 品牌)
+#   - ITforceMarkdown.Pro.exe   (Pro 品牌)
+# 通过 dotnet publish -p:BuildFlavor=Local | Pro 切换 csproj 里的条件 PropertyGroup,
+# 自动换 AssemblyName / Product / Icon / 编译常量。
 #
-# 产物在哪儿看:
-#   - 普通 push: 仓库 Actions tab → 进入这次 run → 页面底部 Artifacts
-#   - 打 tag:    仓库 Releases tab → 新建的 release → Assets 下面
+# 触发条件:
+#   - push 到 main 分支     → 编译两个版本, artifact 上传 (保留 30 天)
+#   - 提交 vX.Y.Z 这种 tag  → 同时创建 GitHub Release, 两个 .exe 都挂上去
+#   - 手动 (workflow_dispatch)
 name: Build Windows
 
 on:
@@ -18,7 +20,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# 同一分支重复 push 时, 自动取消上一次还没跑完的 run, 省 CI 分钟。
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
@@ -26,27 +27,25 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [Local, Pro]
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # GitHub windows-latest runner 默认装的就是 .NET 8 SDK, 但显式指定一下
-      # 防止 runner 镜像升级时跳到不兼容的版本。
       - name: Setup .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Show dotnet version
-        run: dotnet --info
-
       - name: Restore NuGet packages
         run: dotnet restore src/ITforceMarkdown/ITforceMarkdown.csproj
 
-      # 推算 publish version: tag (refs/tags/v1.2.3) → 1.2.3
-      # 没 tag 时用 0.1.<run_number>, 方便区分 nightly build。
       - name: Compute version
         id: version
         shell: pwsh
@@ -59,7 +58,7 @@ jobs:
           Write-Host "Publishing version: $v"
           echo "version=$v" >> $env:GITHUB_OUTPUT
 
-      - name: Publish (self-contained single-file, win-x64)
+      - name: Publish (${{ matrix.flavor }})
         run: |
           dotnet publish src/ITforceMarkdown/ITforceMarkdown.csproj `
             --configuration Release `
@@ -68,35 +67,47 @@ jobs:
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
+            -p:BuildFlavor=${{ matrix.flavor }} `
             -p:Version=${{ steps.version.outputs.version }} `
             -p:AssemblyVersion=${{ steps.version.outputs.version }}.0 `
             -p:FileVersion=${{ steps.version.outputs.version }}.0 `
-            --output publish
+            --output publish/${{ matrix.flavor }}
 
-      # 把 publish 目录里多余的 pdb / 调试符号去掉, 只留 exe + 必需的运行时文件。
       - name: Trim publish output
         shell: pwsh
         run: |
-          Get-ChildItem publish -Recurse -Include *.pdb | Remove-Item -Force
-          Get-ChildItem publish | Format-Table Name, Length
+          Get-ChildItem publish/${{ matrix.flavor }} -Recurse -Include *.pdb | Remove-Item -Force
+          Get-ChildItem publish/${{ matrix.flavor }} | Format-Table Name, Length
 
-      - name: Upload artifact (build output)
+      - name: Compute artifact name
+        id: artifact
+        shell: pwsh
+        run: |
+          if ("${{ matrix.flavor }}" -eq "Pro") {
+            $name = "ITforceMarkdown.Pro-windows-x64-v${{ steps.version.outputs.version }}"
+          } else {
+            $name = "ITforceMarkdown-windows-x64-v${{ steps.version.outputs.version }}"
+          }
+          echo "name=$name" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ITforceMarkdown-windows-x64-v${{ steps.version.outputs.version }}
-          path: publish/
+          name: ${{ steps.artifact.outputs.name }}
+          path: publish/${{ matrix.flavor }}/
           retention-days: 30
           if-no-files-found: error
 
-      # 仅在打了 vX.Y.Z tag 时, 创建 GitHub Release 并把 exe 挂上去。
-      - name: Create GitHub Release
+      # 打 tag 时 把这个 flavor 的 .exe 挂到 Release。
+      # 因为 matrix 跑 2 次, 两个 flavor 都会 append.
+      - name: Create / append GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           name: ITforce Markdown v${{ steps.version.outputs.version }}
           tag_name: ${{ github.ref_name }}
           files: |
-            publish/ITforceMarkdown.exe
+            publish/${{ matrix.flavor }}/*.exe
           generate_release_notes: true
           draft: false
           prerelease: false

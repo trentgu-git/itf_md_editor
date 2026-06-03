@@ -29,6 +29,20 @@ public partial class App : Application
     public static WorkspaceStore Store
         => _store ?? throw new InvalidOperationException("WorkspaceStore not initialized yet.");
 
+    // ─────────────────── 品牌 (Local / Pro 分流) ───────────────────
+#if PRO
+    /// <summary>Pro flavor 标识 (csproj BuildFlavor=Pro 自动定义 PRO 常量).</summary>
+    public const bool IsProEdition = true;
+    /// <summary>用户可见的产品名.</summary>
+    public const string ProductName = "ITforce Markdown Pro";
+    /// <summary>Window.Icon 用的 pack URI, 跟 csproj &lt;Resource Include&gt; 对位.</summary>
+    public const string IconPackUri = "pack://application:,,,/Assets/AppIcon.Pro.ico";
+#else
+    public const bool IsProEdition = false;
+    public const string ProductName = "ITforce Markdown";
+    public const string IconPackUri = "pack://application:,,,/Assets/AppIcon.ico";
+#endif
+
     // ─────────────────── 静态 ctor: 比 InitializeComponent 还早 ───────────────────
     static App()
     {

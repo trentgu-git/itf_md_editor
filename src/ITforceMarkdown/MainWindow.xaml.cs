@@ -36,6 +36,14 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // 按 flavor 装图标 (Local / Pro)。XAML 里设 pack URI 在 single-file
+        // 自解压场景偶发解析失败, 代码里设更稳。
+        try
+        {
+            Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(App.IconPackUri));
+        }
+        catch { /* 图标加载失败不影响功能 */ }
+
         Store.PropertyChanged += OnStoreChanged;
         UpdateTitle();
         UpdateAppearanceCheck();
@@ -70,7 +78,7 @@ public partial class MainWindow : Window
         var doc = Store.SelectedFile != null
             ? Path.GetFileNameWithoutExtension(Store.SelectedFile.Name)
             : "Untitled";
-        Title = $"{doc}{dirty} — ITforce Markdown";
+        Title = $"{doc}{dirty} — {App.ProductName}";
     }
 
     private void UpdateAppearanceCheck()
@@ -217,8 +225,8 @@ public partial class MainWindow : Window
     {
         var asmVer = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
         MessageBox.Show(this,
-            $"ITforce Markdown — Windows\n\nv{asmVer}\n.NET {Environment.Version}\n\n© ITforce",
-            "About",
+            $"{App.ProductName} — Windows\n\nv{asmVer}\n.NET {Environment.Version}\n{Environment.OSVersion}\n\n© ITforce",
+            $"About {App.ProductName}",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
