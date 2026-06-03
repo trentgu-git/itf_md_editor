@@ -32,6 +32,7 @@ public partial class WorkspaceStore : ObservableObject
     private const string KeyAppearance      = "appearance";
     private const string KeyHideEmpty       = "hideEmptyFolders";
     private const string KeyLastFile        = "lastSelectedFile";
+    private const string KeyGitLabSettings  = "gitLabSettings";  // Pro only, Local 不暴露 UI
     private const int    RecentDocumentsLimit = 15;
 
     // ─────────────────── 可观察状态 ───────────────────
@@ -139,6 +140,23 @@ public partial class WorkspaceStore : ObservableObject
         RichCommandToken = Guid.NewGuid();
     }
 
+    // ─────────────────── GitLab 设置 (Pro flavor only 走 UI; 设置本身始终持久化) ───────────────────
+
+    /// <summary>当前 GitLab 设置。Local 不会有 UI 暴露; Pro 通过 GitLabSettingsDialog 编辑。</summary>
+    public GitLabSettings GitLabSettings { get; private set; } = new();
+
+    public void SaveGitLabSettings(GitLabSettings s)
+    {
+        GitLabSettings = s;
+        PersistenceService.Save(KeyGitLabSettings, s);
+    }
+
+    private void LoadGitLabSettings()
+    {
+        var s = PersistenceService.Load<GitLabSettings>(KeyGitLabSettings);
+        if (s != null) GitLabSettings = s;
+    }
+
     private void RefreshHeadings()
     {
         try
@@ -188,7 +206,10 @@ public partial class WorkspaceStore : ObservableObject
                 RecentDocuments.Add(p);
         }
 
-        // 4. 恢复上次打开的文件
+        // 4. 加载 GitLab 设置 (Pro 用; Local 没 UI 入口但读出来无害)
+        LoadGitLabSettings();
+
+        // 5. 恢复上次打开的文件
         var lastFile = PersistenceService.LoadString(KeyLastFile);
         if (lastFile != null && File.Exists(lastFile))
             OpenExternalFile(lastFile);

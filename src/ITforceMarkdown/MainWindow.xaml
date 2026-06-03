@@ -34,6 +34,12 @@
                 <Separator/>
                 <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="MenuSave_Click"/>
                 <MenuItem Header="_Close Document" Click="MenuClose_Click"/>
+                <Separator x:Name="MenuGitLabSep1" Visibility="Collapsed"/>
+                <!-- Pro only: GitLab 子菜单, code-behind 按 flavor 显示 -->
+                <MenuItem x:Name="MenuGitLab" Header="_GitLab" Visibility="Collapsed">
+                    <MenuItem x:Name="MenuGitLabSettings" Header="GitLab _Settings…" Click="MenuGitLabSettings_Click"/>
+                    <MenuItem x:Name="MenuGitLabSync" Header="Sync _Now" Click="MenuGitLabSync_Click"/>
+                </MenuItem>
                 <Separator/>
                 <MenuItem Header="Export _PDF…" Click="MenuExportPdf_Click"/>
                 <MenuItem Header="Export _Word…" Click="MenuExportWord_Click"/>

@@ -44,6 +44,13 @@ public partial class MainWindow : Window
         }
         catch { /* 图标加载失败不影响功能 */ }
 
+        // Pro flavor 才显示 GitLab 子菜单
+        if (App.IsProEdition)
+        {
+            MenuGitLab.Visibility = Visibility.Visible;
+            MenuGitLabSep1.Visibility = Visibility.Visible;
+        }
+
         Store.PropertyChanged += OnStoreChanged;
         UpdateTitle();
         UpdateAppearanceCheck();
@@ -187,6 +194,52 @@ public partial class MainWindow : Window
         Exporter.ExportWord(this, Store.SourceDraft, Store.SelectedFile.Name);
     }
     private void MenuExit_Click(object sender, RoutedEventArgs e) => Close();
+
+    // ─────────────────── GitLab (Pro only) ───────────────────
+    private void MenuGitLabSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Views.GitLabSettingsDialog { Owner = this };
+        dlg.ShowDialog();
+    }
+
+    private async void MenuGitLabSync_Click(object sender, RoutedEventArgs e)
+    {
+        // 快速 sync — 不弹完整对话框, 直接拿当前设置跑。如果没配置过, 引导去 Settings。
+        if (!Store.GitLabSettings.IsConfigured)
+        {
+            var r = MessageBox.Show(this,
+                "GitLab is not configured yet. Open settings now?",
+                "GitLab Sync",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Information);
+            if (r == MessageBoxResult.OK)
+                new Views.GitLabSettingsDialog { Owner = this }.ShowDialog();
+            return;
+        }
+
+        Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+        Store.StatusMessage = "GitLab: syncing…";
+        try
+        {
+#if PRO
+            var result = await Services.GitLabService.SyncAsync(Store.GitLabSettings);
+            Store.StatusMessage = (result.Success ? "GitLab: " : "GitLab error: ") + result.Message;
+            if (result.Success)
+                Store.AddWorkspace(Store.GitLabSettings.LocalCachePath);
+#else
+            await System.Threading.Tasks.Task.Delay(50);
+            Store.StatusMessage = "GitLab is only available in the Pro edition.";
+#endif
+        }
+        catch (Exception ex)
+        {
+            Store.StatusMessage = "GitLab error: " + ex.Message;
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
+    }
 
     // ─────────────────── View 菜单 ───────────────────
     private void MenuModeRead_Click(object sender, RoutedEventArgs e)   => Store.EditorMode = EditorMode.Read;
