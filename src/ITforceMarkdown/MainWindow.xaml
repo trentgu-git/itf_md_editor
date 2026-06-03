@@ -1,36 +1,112 @@
 <Window x:Class="ITforceMarkdown.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ITforce Markdown (Windows)"
+        xmlns:views="clr-namespace:ITforceMarkdown.Views"
+        Title="ITforce Markdown"
         Width="1240"
         Height="760"
         MinWidth="900"
         MinHeight="600"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Brush.Window}"
+        AllowDrop="True"
+        Drop="MainWindow_Drop">
 
-    <!--
-        临时骨架页面 — 仅证明编译 + 启动 + 窗口能起来。
-        别的 AI 拿到这个项目后, 按 WINDOWS_PORT_SPEC.md 把这里替换成
-        Grid(Sidebar + TopActionBar + DocumentWorkspace) 三栏布局即可。
-    -->
-    <Grid Background="#F7F7F8">
-        <StackPanel HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-            <TextBlock Text="ITforce Markdown — Windows port"
-                       FontSize="24"
-                       FontWeight="SemiBold"
-                       Foreground="#1F2937"
-                       HorizontalAlignment="Center" />
-            <TextBlock Text="Skeleton 0.1.0 — build pipeline OK"
-                       FontSize="13"
-                       Foreground="#6B7280"
-                       HorizontalAlignment="Center"
-                       Margin="0,12,0,0" />
-            <TextBlock x:Name="StatusText"
+    <Window.InputBindings>
+        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}"/>
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding NewDocCommand}"/>
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenFileCommand}"/>
+        <KeyBinding Key="OemOpenBrackets" Modifiers="Control" Command="{Binding BackCommand}"/>
+        <KeyBinding Key="OemCloseBrackets" Modifiers="Control" Command="{Binding ForwardCommand}"/>
+        <KeyBinding Key="OemBackslash" Modifiers="Control" Command="{Binding ToggleSidebarCommand}"/>
+    </Window.InputBindings>
+
+    <DockPanel>
+        <!-- 顶部菜单 -->
+        <Menu DockPanel.Dock="Top"
+              Background="{DynamicResource Brush.ToolbarBg}">
+            <MenuItem Header="_File">
+                <MenuItem Header="_New" InputGestureText="Ctrl+N" Click="MenuNew_Click"/>
+                <MenuItem Header="_Open File…" InputGestureText="Ctrl+O" Click="MenuOpenFile_Click"/>
+                <MenuItem Header="Open _Folder…" Click="MenuOpenFolder_Click"/>
+                <MenuItem x:Name="MenuRecent" Header="Open _Recent"/>
+                <Separator/>
+                <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="MenuSave_Click"/>
+                <MenuItem Header="_Close Document" Click="MenuClose_Click"/>
+                <Separator/>
+                <MenuItem Header="Export _PDF…" Click="MenuExportPdf_Click"/>
+                <MenuItem Header="Export _Word…" Click="MenuExportWord_Click"/>
+                <Separator/>
+                <MenuItem Header="E_xit" Click="MenuExit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Command="ApplicationCommands.Undo"/>
+                <MenuItem Command="ApplicationCommands.Redo"/>
+                <Separator/>
+                <MenuItem Command="ApplicationCommands.Cut"/>
+                <MenuItem Command="ApplicationCommands.Copy"/>
+                <MenuItem Command="ApplicationCommands.Paste"/>
+                <Separator/>
+                <MenuItem Command="ApplicationCommands.SelectAll"/>
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="_Read"   Click="MenuModeRead_Click"/>
+                <MenuItem Header="_Edit"   Click="MenuModeRich_Click"/>
+                <MenuItem Header="_Source" Click="MenuModeSource_Click"/>
+                <Separator/>
+                <MenuItem Header="_Appearance">
+                    <MenuItem x:Name="MenuApSystem" Header="Follow System" Click="MenuApSystem_Click" IsCheckable="True"/>
+                    <MenuItem x:Name="MenuApLight"  Header="Light"  Click="MenuApLight_Click"  IsCheckable="True"/>
+                    <MenuItem x:Name="MenuApDark"   Header="Dark"   Click="MenuApDark_Click"   IsCheckable="True"/>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="Toggle _Sidebar" InputGestureText="Ctrl+\" Click="MenuToggleSidebar_Click"/>
+                <Separator/>
+                <MenuItem Header="_Back"    InputGestureText="Ctrl+[" Click="MenuBack_Click"/>
+                <MenuItem Header="_Forward" InputGestureText="Ctrl+]" Click="MenuForward_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Window">
+                <MenuItem Header="_Minimize" Click="MenuMinimize_Click"/>
+                <MenuItem Header="_Maximize / Restore" Click="MenuMaxRestore_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="ITforce Markdown _Help" Click="MenuHelp_Click"/>
+                <Separator/>
+                <MenuItem Header="_About" Click="MenuAbout_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- 状态栏 -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource Brush.ToolbarBg}"
+                BorderBrush="{DynamicResource Brush.Line}"
+                BorderThickness="0,1,0,0"
+                Padding="12,4">
+            <TextBlock x:Name="StatusBar"
+                       Text="Ready"
                        FontSize="11"
-                       Foreground="#9CA3AF"
-                       HorizontalAlignment="Center"
-                       Margin="0,24,0,0" />
-        </StackPanel>
-    </Grid>
+                       Foreground="{DynamicResource Brush.Muted}"/>
+        </Border>
+
+        <!-- 主区: sidebar 左, 右侧 TopActionBar + DocumentWorkspace -->
+        <Grid x:Name="RootGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SidebarCol" Width="280" MinWidth="200"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*" MinWidth="500"/>
+            </Grid.ColumnDefinitions>
+
+            <views:Sidebar Grid.Column="0"/>
+
+            <GridSplitter Grid.Column="1"
+                          HorizontalAlignment="Stretch"
+                          Background="{DynamicResource Brush.Line}"
+                          ResizeBehavior="PreviousAndNext"/>
+
+            <DockPanel Grid.Column="2">
+                <views:TopActionBar DockPanel.Dock="Top"/>
+                <views:DocumentWorkspace/>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
 </Window>
