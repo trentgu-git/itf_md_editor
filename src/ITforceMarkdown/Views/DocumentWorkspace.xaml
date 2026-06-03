@@ -56,6 +56,27 @@
 
                     <Border Width="1" Margin="8,4" Background="{DynamicResource Brush.Line}"/>
 
+                    <Button x:Name="BtnDelete"
+                            Style="{StaticResource ActionButton}"
+                            Click="Delete_Click"
+                            ToolTip="Move to Recycle Bin">
+                        <TextBlock Text="🗑" FontSize="13"/>
+                    </Button>
+                    <Button x:Name="BtnDuplicate"
+                            Style="{StaticResource ActionButton}"
+                            Click="Duplicate_Click"
+                            ToolTip="Duplicate this document">
+                        <TextBlock Text="⧉" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="BtnFullscreen"
+                            Style="{StaticResource ActionButton}"
+                            Click="Fullscreen_Click"
+                            ToolTip="Toggle distraction-free mode (Ctrl+\)">
+                        <TextBlock x:Name="FullscreenIcon" Text="⛶" FontSize="14"/>
+                    </Button>
+
+                    <Border Width="1" Margin="8,4" Background="{DynamicResource Brush.Line}"/>
+
                     <Button x:Name="BtnSave" Content="Save"
                             Style="{StaticResource ActionButton}"
                             Click="Save_Click"/>
@@ -103,8 +124,13 @@
                           Background="{DynamicResource Brush.Line}"
                           ResizeBehavior="PreviousAndNext"/>
 
-            <!-- 文档主体: Read / Edit / Source 通过代码 swap 进 ContentHost -->
-            <Grid Grid.Column="2" x:Name="ContentHost"/>
+            <!-- 文档主体: 顶上是 EditorToolbar (仅 Rich 模式可见), 下面是 ContentHost -->
+            <DockPanel Grid.Column="2">
+                <views:EditorToolbar x:Name="EditorToolbarHost"
+                                     DockPanel.Dock="Top"
+                                     Visibility="Collapsed"/>
+                <Grid x:Name="ContentHost"/>
+            </DockPanel>
         </Grid>
 
     </Grid>

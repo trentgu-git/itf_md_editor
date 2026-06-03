@@ -25,6 +25,55 @@ function scrollToHeading(id) {
 window.__setContent = (html) => { doc.innerHTML = html; };
 window.__scrollToHeading = (id) => scrollToHeading(id);
 
+// 富文本格式化命令 — 工具栏按钮通过 ExecuteScriptAsync 调这些。
+// execCommand 虽然被 W3C 标记为 deprecated, 但在所有 Chromium 衍生品里
+// (包括 WebView2) 仍然是处理 contenteditable 富文本编辑的事实标准, 短期内
+// 不会移除。
+window.__runCommand = function (command, value) {
+  doc.focus();
+  try { document.execCommand(command, false, value === undefined ? null : value); }
+  catch (e) { /* ignore */ }
+  notifyChange();
+};
+
+window.__formatBlock = function (tagName) {
+  doc.focus();
+  try { document.execCommand('formatBlock', false, tagName); }
+  catch (e) { /* ignore */ }
+  notifyChange();
+};
+
+window.__insertLink = function (url) {
+  if (!url) return;
+  window.__runCommand('createLink', url);
+};
+
+window.__insertImage = function (url) {
+  if (!url) return;
+  window.__runCommand('insertImage', url);
+};
+
+window.__insertHTML = function (html) {
+  doc.focus();
+  try { document.execCommand('insertHTML', false, html); }
+  catch (e) { /* ignore */ }
+  notifyChange();
+};
+
+window.__insertTable = function () {
+  window.__insertHTML(
+    '<table><thead><tr><th>Column</th><th>Column</th></tr></thead>' +
+    '<tbody><tr><td>Value</td><td>Value</td></tr></tbody></table><p><br></p>');
+};
+
+window.__insertHR = function () {
+  window.__runCommand('insertHorizontalRule');
+};
+
+window.__insertCodeBlock = function () {
+  window.__insertHTML('<pre><code>code</code></pre><p><br></p>');
+};
+
 // 富文本 -> Markdown 反向序列化 (简化版, 跟 Mac 版 blocksToMarkdown 等价)
 function blocksToMarkdown(root) {
   const parts = [];

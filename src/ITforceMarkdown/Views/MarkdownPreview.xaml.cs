@@ -36,6 +36,7 @@ public partial class MarkdownPreview : UserControl
     private bool _wv2Ready;
     private string _lastReloadKey = "";
     private Guid _lastScrollToken;
+    private Guid _lastRichCommandToken;
 
     public MarkdownPreview()
     {
@@ -98,7 +99,26 @@ public partial class MarkdownPreview : UserControl
             case nameof(WorkspaceStore.ScrollToken):
                 Dispatcher.BeginInvoke(new Action(async () => await ScrollToTargetAsync()));
                 break;
+
+            case nameof(WorkspaceStore.RichCommandToken):
+                if (IsEditable)
+                    Dispatcher.BeginInvoke(new Action(async () => await ExecuteRichCommandAsync()));
+                break;
         }
+    }
+
+    private async Task ExecuteRichCommandAsync()
+    {
+        if (!_wv2Ready) return;
+        if (Store.RichCommandToken == _lastRichCommandToken) return;
+        _lastRichCommandToken = Store.RichCommandToken;
+        var js = Store.RichCommandJs;
+        if (string.IsNullOrEmpty(js)) return;
+        try
+        {
+            await WebView.CoreWebView2.ExecuteScriptAsync(js);
+        }
+        catch { /* webview not ready, ignore */ }
     }
 
     private async Task ReloadAsync()

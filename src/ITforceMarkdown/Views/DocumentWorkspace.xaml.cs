@@ -36,6 +36,29 @@ public partial class DocumentWorkspace : UserControl
             case nameof(WorkspaceStore.IsDirty):
                 Dispatcher.BeginInvoke(new Action(Sync));
                 break;
+            case nameof(WorkspaceStore.IsSidebarHidden):
+                Dispatcher.BeginInvoke(new Action(ApplyFullscreen));
+                break;
+        }
+    }
+
+    /// <summary>
+    /// "全屏阅读"模式: Mac 版的 IsSidebarHidden 不光收 sidebar, 还把 Outline 列
+    /// 也收起来, 整个文档独占, 减少干扰。我们这边同步处理。
+    /// </summary>
+    private void ApplyFullscreen()
+    {
+        if (Store.IsSidebarHidden)
+        {
+            OutlineCol.Width = new GridLength(0);
+            FullscreenIcon.Text = "⛗"; // 进入全屏后图标换"退出"样式
+            BtnFullscreen.ToolTip = "Exit distraction-free mode (Ctrl+\\)";
+        }
+        else
+        {
+            OutlineCol.Width = new GridLength(240);
+            FullscreenIcon.Text = "⛶";
+            BtnFullscreen.ToolTip = "Toggle distraction-free mode (Ctrl+\\)";
         }
     }
 
@@ -46,14 +69,16 @@ public partial class DocumentWorkspace : UserControl
         {
             TitleLabel.Text = "No document";
             DirtyDot.Visibility = Visibility.Collapsed;
-            BtnSave.IsEnabled = BtnExportPdf.IsEnabled = BtnExportWord.IsEnabled = BtnClose.IsEnabled = false;
+            BtnSave.IsEnabled = BtnExportPdf.IsEnabled = BtnExportWord.IsEnabled =
+                BtnClose.IsEnabled = BtnDelete.IsEnabled = BtnDuplicate.IsEnabled = false;
         }
         else
         {
             TitleLabel.Text = System.IO.Path.GetFileNameWithoutExtension(Store.SelectedFile.Name);
             DirtyDot.Visibility = Store.IsDirty ? Visibility.Visible : Visibility.Collapsed;
             BtnSave.IsEnabled = Store.IsDirty;
-            BtnExportPdf.IsEnabled = BtnExportWord.IsEnabled = BtnClose.IsEnabled = true;
+            BtnExportPdf.IsEnabled = BtnExportWord.IsEnabled = BtnClose.IsEnabled =
+                BtnDelete.IsEnabled = BtnDuplicate.IsEnabled = true;
         }
 
         // mode 按钮高亮
@@ -63,20 +88,24 @@ public partial class DocumentWorkspace : UserControl
         ContentHost.Children.Clear();
         if (Store.SelectedFile == null)
         {
+            EditorToolbarHost.Visibility = Visibility.Collapsed;
             ContentHost.Children.Add(BuildWelcome());
             return;
         }
         switch (Store.EditorMode)
         {
             case EditorMode.Read:
+                EditorToolbarHost.Visibility = Visibility.Collapsed;
                 _readView ??= new MarkdownPreview { IsEditable = false };
                 ContentHost.Children.Add(_readView);
                 break;
             case EditorMode.Rich:
+                EditorToolbarHost.Visibility = Visibility.Visible;
                 _richView ??= new MarkdownPreview { IsEditable = true };
                 ContentHost.Children.Add(_richView);
                 break;
             case EditorMode.Source:
+                EditorToolbarHost.Visibility = Visibility.Collapsed;
                 _sourceView ??= new SourceEditor();
                 ContentHost.Children.Add(_sourceView);
                 break;
@@ -151,4 +180,39 @@ public partial class DocumentWorkspace : UserControl
         if (Store.SelectedFile == null) return;
         Exporter.ExportWord(Window.GetWindow(this)!, Store.SourceDraft, Store.SelectedFile.Name);
     }
+
+    private void Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (Store.SelectedFile == null) return;
+        var name = Store.SelectedFile.Name;
+        var r = MessageBox.Show(
+            Window.GetWindow(this)!,
+            $"Move \"{name}\" to the Recycle Bin?\n\nYou can restore it from the Recycle Bin later.",
+            "Delete document",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        if (r != MessageBoxResult.OK) return;
+        Store.DeleteCurrent();
+    }
+
+    private void Duplicate_Click(object sender, RoutedEventArgs e)
+    {
+        if (Store.SelectedFile == null) return;
+        // 有未保存改动时先 save, 不然副本是磁盘上的旧版本, 用户会困惑
+        if (Store.IsDirty)
+        {
+            var r = MessageBox.Show(
+                Window.GetWindow(this)!,
+                "Save current changes before duplicating?",
+                "Unsaved changes",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+            if (r == MessageBoxResult.Cancel) return;
+            if (r == MessageBoxResult.Yes) Store.SaveCurrent();
+        }
+        Store.DuplicateCurrent();
+    }
+
+    private void Fullscreen_Click(object sender, RoutedEventArgs e)
+        => Store.IsSidebarHidden = !Store.IsSidebarHidden;
 }

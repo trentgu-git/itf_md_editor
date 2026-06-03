@@ -123,6 +123,22 @@ public partial class WorkspaceStore : ObservableObject
         ScrollToken = Guid.NewGuid();
     }
 
+    // ─────────────────── Rich 模式格式化命令 ───────────────────
+    /// <summary>下一条要让 webview 执行的 JS 命令。EditorToolbar 写, MarkdownPreview 读。</summary>
+    [ObservableProperty]
+    private string? richCommandJs;
+
+    /// <summary>每次 SendRichCommand 都换新 token, 让 MarkdownPreview 即便 JS 相同也重新执行。</summary>
+    [ObservableProperty]
+    private Guid richCommandToken = Guid.NewGuid();
+
+    /// <summary>EditorToolbar 调用, 发一段 JS 给当前 Rich 模式的 WebView 执行。</summary>
+    public void SendRichCommand(string js)
+    {
+        RichCommandJs = js;
+        RichCommandToken = Guid.NewGuid();
+    }
+
     private void RefreshHeadings()
     {
         try
@@ -327,6 +343,78 @@ public partial class WorkspaceStore : ObservableObject
         SelectedFile = null;
         SourceDraft = "";
         LastSavedSource = "";
+    }
+
+    /// <summary>把当前文件送回收站, 然后关掉文档。失败弹错。</summary>
+    public bool DeleteCurrent()
+    {
+        if (SelectedFile == null) return false;
+        var path = SelectedFile.Path;
+        try
+        {
+            // SendToRecycleBin: 可恢复, 比直接 File.Delete 安全
+            Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                path,
+                Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+
+            CloseDocument();
+            // 从 recent 里剔掉
+            for (int i = RecentDocuments.Count - 1; i >= 0; i--)
+            {
+                if (string.Equals(RecentDocuments[i], path, StringComparison.OrdinalIgnoreCase))
+                    RecentDocuments.RemoveAt(i);
+            }
+            PersistenceService.Save(KeyRecentDocuments, RecentDocuments.ToList());
+            RefreshAllTrees();
+            StatusMessage = $"Moved to Recycle Bin: {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Delete failed: {ex.Message}";
+            return false;
+        }
+    }
+
+    /// <summary>同目录创建一份副本, 文件名加 " (copy)" 后缀, 自动避重。</summary>
+    public string? DuplicateCurrent()
+    {
+        if (SelectedFile == null) return null;
+        var src = SelectedFile.Path;
+        var dir = Path.GetDirectoryName(src);
+        if (string.IsNullOrEmpty(dir)) return null;
+
+        var baseName = Path.GetFileNameWithoutExtension(src);
+        var ext = Path.GetExtension(src);
+        var idx = 0;
+        string dst;
+        do
+        {
+            var suffix = idx == 0 ? " (copy)" : $" (copy {idx + 1})";
+            dst = Path.Combine(dir, baseName + suffix + ext);
+            idx++;
+        } while (File.Exists(dst));
+
+        try
+        {
+            File.Copy(src, dst);
+            RefreshAllTrees();
+            var node = new FileNode
+            {
+                Path = dst,
+                Name = Path.GetFileName(dst),
+                IsDirectory = false,
+            };
+            SelectFile(node);
+            StatusMessage = $"Duplicated to {Path.GetFileName(dst)}";
+            return dst;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Duplicate failed: {ex.Message}";
+            return null;
+        }
     }
 
     /// <summary>新建空 markdown 文件 — 在当前选中文件所在目录, 或第一个 workspace 根。</summary>
