@@ -2,14 +2,17 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
+    <!--
+        Resources are populated entirely from code in App.xaml.cs +
+        ThemeManager. We deliberately avoid `<ResourceDictionary Source="..." />`
+        with pack URIs here, because single-file self-extracting builds have
+        been observed to fail silently at pack URI resolution on some
+        Windows machines (no error dialog, no visible window).
+
+        所有颜色 + Brush 都由 ThemeManager.Initialize 在 OnStartup 里加进
+        App.Current.Resources.MergedDictionaries[0]。
+    -->
     <Application.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <!-- 默认装 Light, ThemeManager.Initialize 之后会在 [0] 位置插入
-                     用户选的颜色字典, 把这份顶下去。 -->
-                <ResourceDictionary Source="Themes/Light.xaml"/>
-                <ResourceDictionary Source="Themes/Brushes.xaml"/>
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
+        <ResourceDictionary/>
     </Application.Resources>
 </Application>
