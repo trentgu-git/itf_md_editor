@@ -84,9 +84,10 @@ public static class WebView2Host
     }
 
     /// <summary>
-    /// 把 Engine.Resources 里所有 .js/.css 文件 dump 到磁盘.
-    /// 用文件大小当 cache key: 已存在且 size 一致就跳过, 改了再覆盖.
-    /// 这样升级版本时 size 变了会自动重写, 不会用旧的 mermaid.
+    /// 把 Engine.Resources 里所有 .min.js / .min.css 文件 dump 到磁盘.
+    /// 先把 stream 拷成 byte[], 再用 byte[].Length 跟磁盘 size 比较 — 比直接读
+    /// stream.Length 更稳 (某些 ManifestResourceStream 实现 Length 行为不一致).
+    /// 已存在且 size 一致就跳过, 改了就覆盖.
     /// </summary>
     private static void ExtractEmbeddedAssets(string targetDir)
     {
@@ -103,19 +104,17 @@ public static class WebView2Host
                 !filename.EndsWith(".min.css", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var dstPath = Path.Combine(targetDir, filename);
             using var src = asm.GetManifestResourceStream(resName);
             if (src == null) continue;
+            using var ms = new MemoryStream();
+            src.CopyTo(ms);
+            var bytes = ms.ToArray();
 
-            // cache: 同 size 就不动 (避免每次启动重写几 MB)
-            if (File.Exists(dstPath))
-            {
-                var existingLen = new FileInfo(dstPath).Length;
-                if (existingLen == src.Length) continue;
-            }
-
-            using var dst = File.Create(dstPath);
-            src.CopyTo(dst);
+            var dstPath = Path.Combine(targetDir, filename);
+            // 已存在 + 大小一致就跳过 (避免每次启动重写几 MB).
+            if (File.Exists(dstPath) && new FileInfo(dstPath).Length == bytes.Length)
+                continue;
+            File.WriteAllBytes(dstPath, bytes);
         }
     }
 }

@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using ITforceMarkdown.Models;
 using ITforceMarkdown.Services;
@@ -31,6 +33,10 @@ public partial class WorkspaceStore : ObservableObject
     private const string KeyRecentDocuments = "recentDocuments";
     private const string KeyAppearance      = "appearance";
     private const string KeyMenuLanguage    = "menuLanguage";
+    private const string KeyZoomLevel       = "documentZoomLevel";
+    public const double ZoomMin = 0.5;
+    public const double ZoomMax = 2.5;
+    public const double ZoomStep = 0.1;
     private const string KeyHideEmpty       = "hideEmptyFolders";
     private const string KeyLastFile        = "lastSelectedFile";
     private const string KeyGitLabSettings  = "gitLabSettings";  // Pro only, Local 不暴露 UI
@@ -66,6 +72,51 @@ public partial class WorkspaceStore : ObservableObject
     /// <summary>菜单语言 (System / English / Chinese), 持久化到 menuLanguage.json.</summary>
     [ObservableProperty]
     private MenuLanguage menuLanguage = MenuLanguage.System;
+
+    /// <summary>
+    /// 文档缩放级别 (1.0 = 100%). 应用到 WebView2.ZoomFactor + SourceEditor 字号.
+    /// 持久化到 documentZoomLevel.json. 范围 ZoomMin..ZoomMax, ZoomStep 步进.
+    /// </summary>
+    [ObservableProperty]
+    private double documentZoomLevel = 1.0;
+
+    public void ZoomIn()    => DocumentZoomLevel = Math.Min(ZoomMax, Math.Round(DocumentZoomLevel + ZoomStep, 2));
+    public void ZoomOut()   => DocumentZoomLevel = Math.Max(ZoomMin, Math.Round(DocumentZoomLevel - ZoomStep, 2));
+    public void ZoomReset() => DocumentZoomLevel = 1.0;
+
+    /// <summary>
+    /// Reload-from-disk token — Read/Edit WebView 看到这个 token 变化就强制重读文件
+    /// (适用于外部编辑器改了文件, 用户点 ↻ 重新加载).
+    /// </summary>
+    [ObservableProperty]
+    private Guid reloadFromDiskToken = Guid.NewGuid();
+
+    /// <summary>外部改动时调用 — 从磁盘重读当前文件, 覆盖未保存草稿前会弹确认.</summary>
+    public void ReloadFromDisk()
+    {
+        var file = SelectedFile;
+        if (file == null) return;
+        if (IsDirty)
+        {
+            var msg = "Discard unsaved changes and reload from disk?";
+            var r = System.Windows.MessageBox.Show(msg, "Reload",
+                System.Windows.MessageBoxButton.OKCancel,
+                System.Windows.MessageBoxImage.Warning);
+            if (r != System.Windows.MessageBoxResult.OK) return;
+        }
+        try
+        {
+            var text = File.ReadAllText(file.Path);
+            SourceDraft = text;
+            LastSavedSource = text;
+            ReloadFromDiskToken = Guid.NewGuid();  // 触发 WebView reload
+            StatusMessage = "Reloaded from disk";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Reload failed: {ex.Message}";
+        }
+    }
 
     /// <summary>全局 sidebar 是否完全隐藏 (全屏阅读)。</summary>
     [ObservableProperty]
@@ -193,6 +244,10 @@ public partial class WorkspaceStore : ObservableObject
         if (Enum.TryParse<MenuLanguage>(langRaw, ignoreCase: true, out var ml))
             MenuLanguage = ml;
 
+        var savedZoom = PersistenceService.LoadValue<double>(KeyZoomLevel);
+        if (savedZoom.HasValue && savedZoom.Value >= ZoomMin && savedZoom.Value <= ZoomMax)
+            DocumentZoomLevel = savedZoom.Value;
+
         var hideEmpty = PersistenceService.LoadValue<bool>(KeyHideEmpty);
         if (hideEmpty.HasValue) HideEmptyFoldersGlobal = hideEmpty.Value;
 
@@ -204,6 +259,7 @@ public partial class WorkspaceStore : ObservableObject
             {
                 LocalWorkspaces.Add(w);
                 WorkspaceTrees[w.Id] = WorkspaceScanner.Scan(w.Path);
+                AttachWatcher(w);
             }
         }
 
@@ -230,6 +286,9 @@ public partial class WorkspaceStore : ObservableObject
 
     partial void OnMenuLanguageChanged(MenuLanguage value)
         => PersistenceService.SaveString(KeyMenuLanguage, value.ToString());
+
+    partial void OnDocumentZoomLevelChanged(double value)
+        => PersistenceService.Save(KeyZoomLevel, value);
 
     partial void OnHideEmptyFoldersGlobalChanged(bool value)
         => PersistenceService.Save(KeyHideEmpty, value);
@@ -267,6 +326,7 @@ public partial class WorkspaceStore : ObservableObject
         var ws = new Workspace { Path = folderPath };
         LocalWorkspaces.Add(ws);
         WorkspaceTrees[ws.Id] = WorkspaceScanner.Scan(folderPath);
+        AttachWatcher(ws);
         PersistWorkspaces();
         StatusMessage = $"Added workspace: {ws.Name}";
     }
@@ -275,6 +335,7 @@ public partial class WorkspaceStore : ObservableObject
     {
         LocalWorkspaces.Remove(ws);
         WorkspaceTrees.Remove(ws.Id);
+        DetachWatcher(ws);
         PersistWorkspaces();
     }
 
@@ -298,6 +359,97 @@ public partial class WorkspaceStore : ObservableObject
             WorkspaceTrees[ws.Id] = WorkspaceScanner.Scan(ws.Path);
         OnPropertyChanged(nameof(WorkspaceTrees));
         OnPropertyChanged(nameof(LocalWorkspaces));
+    }
+
+    /// <summary>
+    /// 后台异步重扫一个 workspace, 完成后切回 UI 线程发 PropertyChanged.
+    /// Watcher 的 debounce 回调用这个 — 避免大 workspace 重扫时 UI 卡 1 秒.
+    /// </summary>
+    public async Task RefreshWorkspaceAsync(Workspace ws)
+    {
+        var path = ws.Path;
+        var newTree = await Task.Run(() => WorkspaceScanner.Scan(path));
+        // marshal 回 UI 线程更新 dictionary + 发通知
+        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            if (!LocalWorkspaces.Contains(ws)) return;  // workspace 已被移除
+            WorkspaceTrees[ws.Id] = newTree;
+            OnPropertyChanged(nameof(WorkspaceTrees));
+            OnPropertyChanged(nameof(LocalWorkspaces));
+        });
+    }
+
+    // ─────────────────── FileSystemWatcher (auto-refresh) ───────────────────
+    //
+    // 每个 workspace 装一个 FileSystemWatcher, 监 .md/.markdown 的
+    // Created/Changed/Renamed/Deleted. 不直接 RefreshWorkspace —
+    // 用一个 timer 做 500ms 防抖: 大量 git checkout / Vim 保存
+    // 会一秒内触发几十个事件, 合成一次 rescan 就够.
+    private readonly Dictionary<Guid, FileSystemWatcher> _watchers = new();
+    private readonly Dictionary<Guid, Timer> _watchDebounce = new();
+
+    private void AttachWatcher(Workspace ws)
+    {
+        try
+        {
+            if (!Directory.Exists(ws.Path)) return;
+            var fsw = new FileSystemWatcher(ws.Path)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.DirectoryName,
+                // Filter 一次只能一个; 用 *.* 在事件里过滤后缀
+                Filter = "*.*",
+            };
+            void OnChanged(object _, FileSystemEventArgs e)
+            {
+                // 只关心 .md/.markdown 改动 + 目录改动 (新增 / 删除文件夹)
+                var isMd = e.Name != null && (
+                    e.Name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
+                    e.Name.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase));
+                var isDirectoryEvent =
+                    e.ChangeType == WatcherChangeTypes.Created ||
+                    e.ChangeType == WatcherChangeTypes.Deleted ||
+                    e.ChangeType == WatcherChangeTypes.Renamed;
+                if (!isMd && !isDirectoryEvent) return;
+                DebounceRefresh(ws);
+            }
+            fsw.Created += OnChanged;
+            fsw.Deleted += OnChanged;
+            fsw.Changed += OnChanged;
+            fsw.Renamed += OnChanged;
+            fsw.Error   += (_, _) => { /* network 盘断开等 — 忽略 */ };
+            fsw.EnableRaisingEvents = true;
+            _watchers[ws.Id] = fsw;
+        }
+        catch
+        {
+            // 工作区在远程盘上时 FSW 可能 init 失败 — 没自动刷新但 app 不崩.
+        }
+    }
+
+    private void DetachWatcher(Workspace ws)
+    {
+        if (_watchers.TryGetValue(ws.Id, out var fsw))
+        {
+            try { fsw.EnableRaisingEvents = false; fsw.Dispose(); } catch { }
+            _watchers.Remove(ws.Id);
+        }
+        if (_watchDebounce.TryGetValue(ws.Id, out var t))
+        {
+            t.Dispose();
+            _watchDebounce.Remove(ws.Id);
+        }
+    }
+
+    private void DebounceRefresh(Workspace ws)
+    {
+        // 500ms 内连续事件合成一次 rescan.
+        if (_watchDebounce.TryGetValue(ws.Id, out var existing))
+            existing.Dispose();
+        _watchDebounce[ws.Id] = new Timer(_ =>
+        {
+            _ = RefreshWorkspaceAsync(ws);
+        }, null, dueTime: 500, period: Timeout.Infinite);
     }
 
     public List<FileNode> VisibleTreeFor(Workspace ws)

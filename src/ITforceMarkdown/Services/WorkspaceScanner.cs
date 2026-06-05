@@ -9,9 +9,21 @@ namespace ITforceMarkdown.Services;
 /// <summary>
 /// 扫描一个目录, 构建 FileNode 树, 只收 .md/.markdown 文件。
 /// 跟 Mac 版 WorkspaceStore.buildTree 行为等价。
+///
+/// 鲁棒性 (用户反馈过的崩溃 / 闪退几乎都是 scan 引起的, 全部在这里兜底):
+///   - 深度上限 (MaxDepth) — 防止符号链接 / junction 循环把栈或递归打爆
+///   - 文件总数上限 (MaxFiles) — 防止 OOM (用户开 C:\ 这种几十万文件的根)
+///   - 跳过 reparse point (symlink / junction) — 避免循环 + 跨卷扫描的卡顿
+///   - catch *所有* IOException 系 — Directory.Enumerate 在没权限 / 网络
+///     盘断了 / 长路径 / 锁定文件夹时会抛 5 种不同异常, 一个不漏才不会 crash
 /// </summary>
 public static class WorkspaceScanner
 {
+    /// <summary>最大递归深度. 工作区里超过这个的目录直接跳过.</summary>
+    public const int MaxDepth = 20;
+    /// <summary>整个 workspace 最多收的文件数. 超过就停, 避免 OOM.</summary>
+    public const int MaxFiles = 50_000;
+
     private static readonly HashSet<string> MarkdownExts =
         new(StringComparer.OrdinalIgnoreCase) { ".md", ".markdown" };
 
@@ -21,56 +33,95 @@ public static class WorkspaceScanner
         {
             ".git", ".svn", ".hg", "node_modules", "bin", "obj",
             ".vs", ".idea", ".DS_Store", "__pycache__",
+            // Windows 大坑目录 — 用户开 C:\Users\xxx 时会扫这些, 慢且容易没权限
+            "AppData", "$Recycle.Bin", "System Volume Information",
         };
 
     public static List<FileNode> Scan(string rootPath)
     {
-        if (!Directory.Exists(rootPath)) return new List<FileNode>();
+        if (string.IsNullOrEmpty(rootPath) || !Directory.Exists(rootPath))
+            return new List<FileNode>();
         try
         {
-            return ScanDirectory(rootPath).Children;
+            int totalFiles = 0;
+            var root = ScanDirectory(rootPath, depth: 0, ref totalFiles);
+            return root.Children;
         }
-        catch (UnauthorizedAccessException)
+        catch
         {
+            // 最后兜底: 任何意外异常都不能把 app 干掉, 给空树.
             return new List<FileNode>();
         }
     }
 
-    private static FileNode ScanDirectory(string path)
+    private static FileNode ScanDirectory(string path, int depth, ref int totalFiles)
     {
         var children = new List<FileNode>();
         int mdCount = 0;
 
-        IEnumerable<string> dirs = Array.Empty<string>();
-        IEnumerable<string> files = Array.Empty<string>();
+        // 到达深度 / 文件上限就停, 不再向下递归.
+        if (depth >= MaxDepth || totalFiles >= MaxFiles)
+            return EmptyNode(path);
+
+        // Reparse point (symlink / junction): 直接跳过 — 避免循环, 也避免
+        // 跨卷扫描卡半天.
         try
         {
-            dirs = Directory.EnumerateDirectories(path);
-            files = Directory.EnumerateFiles(path);
+            var di = new DirectoryInfo(path);
+            if ((di.Attributes & FileAttributes.ReparsePoint) != 0)
+                return EmptyNode(path);
         }
-        catch (UnauthorizedAccessException) { /* skip */ }
-        catch (DirectoryNotFoundException) { /* skip */ }
-        catch (PathTooLongException) { /* skip */ }
+        catch { /* attribute 读不到就当普通目录 */ }
+
+        // Directory.Enumerate* 在异常情况下抛多种异常, 全部 catch (吞掉而非崩).
+        IEnumerable<string> dirs = Array.Empty<string>();
+        IEnumerable<string> files = Array.Empty<string>();
+        try { dirs = Directory.EnumerateDirectories(path); }
+        catch (UnauthorizedAccessException) { }
+        catch (DirectoryNotFoundException) { }
+        catch (PathTooLongException) { }
+        catch (IOException) { }                // 网络盘断开 / lock
+        catch (System.Security.SecurityException) { }
+
+        try { files = Directory.EnumerateFiles(path); }
+        catch (UnauthorizedAccessException) { }
+        catch (DirectoryNotFoundException) { }
+        catch (PathTooLongException) { }
+        catch (IOException) { }
+        catch (System.Security.SecurityException) { }
 
         // Directories first
-        foreach (var d in dirs.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        // ToList 是为了把惰性枚举的异常一次性 fail-fast 而不是中途崩.
+        List<string> dirList;
+        try { dirList = dirs.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList(); }
+        catch { dirList = new List<string>(); }
+        foreach (var d in dirList)
         {
-            var name = Path.GetFileName(d);
+            string name;
+            try { name = Path.GetFileName(d); }
+            catch { continue; }
+            if (string.IsNullOrEmpty(name)) continue;
             if (IgnoredDirs.Contains(name)) continue;
-            if (name.StartsWith('.')) continue; // hidden dirs
+            if (name.StartsWith('.')) continue;
 
-            var childNode = ScanDirectory(d);
+            var childNode = ScanDirectory(d, depth + 1, ref totalFiles);
             children.Add(childNode);
             mdCount += childNode.MarkdownCount;
+            if (totalFiles >= MaxFiles) break;  // 全局上限, 中途也能停
         }
 
         // Files second
-        foreach (var f in files.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+        List<string> fileList;
+        try { fileList = files.OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList(); }
+        catch { fileList = new List<string>(); }
+        foreach (var f in fileList)
         {
-            var ext = Path.GetExtension(f);
+            string ext, name;
+            try { ext = Path.GetExtension(f); name = Path.GetFileName(f); }
+            catch { continue; }
             if (!MarkdownExts.Contains(ext)) continue;
-            var name = Path.GetFileName(f);
-            if (name.StartsWith('.')) continue;
+            if (string.IsNullOrEmpty(name) || name.StartsWith('.')) continue;
+            if (totalFiles >= MaxFiles) break;
 
             children.Add(new FileNode
             {
@@ -80,16 +131,32 @@ public static class WorkspaceScanner
                 MarkdownCount = 0,
             });
             mdCount++;
+            totalFiles++;
         }
 
         return new FileNode
         {
             Path = path,
-            Name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar)),
+            Name = SafeName(path),
             IsDirectory = true,
             Children = children,
             MarkdownCount = mdCount,
         };
+    }
+
+    private static FileNode EmptyNode(string path) => new()
+    {
+        Path = path,
+        Name = SafeName(path),
+        IsDirectory = true,
+        Children = new List<FileNode>(),
+        MarkdownCount = 0,
+    };
+
+    private static string SafeName(string path)
+    {
+        try { return Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar)) ?? path; }
+        catch { return path; }
     }
 
     /// <summary>

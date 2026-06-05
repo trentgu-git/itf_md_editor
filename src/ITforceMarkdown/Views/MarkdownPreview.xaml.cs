@@ -65,11 +65,14 @@ public partial class MarkdownPreview : UserControl
             // (2MB 上限会撑爆, 报 "Value does not fall within the expected range").
             WebView2Host.RegisterVirtualHost(WebView.CoreWebView2);
             WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-            WebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            // 暂时开 DevTools 让用户能右键 → Inspect 排查渲染问题 (mermaid 没渲染等).
+            // 稳定后可以改回 false.
+            WebView.CoreWebView2.Settings.AreDevToolsEnabled = true;
             WebView.CoreWebView2.WebMessageReceived += OnWebMessage;
 
             _wv2Ready = true;
             Store.PropertyChanged += OnStoreChanged;
+            ApplyZoom();  // 启动就把上次保存的缩放级别应用上
             await ReloadAsync();
         }
         catch (Exception ex)
@@ -108,7 +111,48 @@ public partial class MarkdownPreview : UserControl
                 if (IsEditable)
                     Dispatcher.BeginInvoke(new Action(async () => await ExecuteRichCommandAsync()));
                 break;
+
+            case nameof(WorkspaceStore.DocumentZoomLevel):
+                Dispatcher.BeginInvoke(new Action(ApplyZoom));
+                break;
+
+            case nameof(WorkspaceStore.ReloadFromDiskToken):
+                Dispatcher.BeginInvoke(new Action(async () => await ForceReloadAsync()));
+                break;
         }
+    }
+
+    private void ApplyZoom()
+    {
+        if (!_wv2Ready) return;
+        try { WebView.ZoomFactor = Store.DocumentZoomLevel; }
+        catch { /* WebView 还没初始化好就忽略 */ }
+    }
+
+    /// <summary>外部点了 Reload from disk — 强制重新 NavigateToString, 不管 IsEditable.</summary>
+    private async Task ForceReloadAsync()
+    {
+        _lastReloadKey = "";  // 失效 cache 让 ReloadAsync 真的重 navigate
+        await ReloadAsync();
+    }
+
+    /// <summary>
+    /// 触发查找: 走 JS prompt + window.find(). WebView2 原生 Find API 在
+    /// 1.0.2792 上还是 experimental, 没暴露在 stable .NET 接口, 用 JS 兜底
+    /// 最稳. 用户也可以直接 Ctrl+F (WebView2 默认开启浏览器 Find UI).
+    /// </summary>
+    public async Task ShowFindAsync()
+    {
+        if (!_wv2Ready) return;
+        WebView.Focus();
+        await WebView.CoreWebView2.ExecuteScriptAsync(@"
+            (function(){
+                var q = prompt('Find in document');
+                if (!q) return;
+                // window.find 在 Chromium/WebView2 上原生支持, 高亮第一个匹配并滚动到位.
+                // 第二个 arg=false 不区分大小写, 第三个 arg=true 循环回开头.
+                if (typeof window.find === 'function') window.find(q, false, false, true);
+            })();");
     }
 
     private async Task ExecuteRichCommandAsync()

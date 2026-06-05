@@ -69,8 +69,12 @@ public static class MarkdownEngine
     public static string RenderInnerHtml(string markdown)
     {
         var (frontMatterHtml, body) = ExtractFrontMatter(markdown ?? "");
-        var bodyHtml = ConvertMermaidCodeBlocks(body);
-        bodyHtml = Markdown.ToHtml(bodyHtml, Pipeline);
+        // Markdig 走标准 fenced code 路径处理 ```mermaid (输出 <pre><code class="language-mermaid">),
+        // 然后我们后处理换成 <div class="mermaid"> 让 mermaid.js 接管.
+        // 比预处理 (regex 先替换 markdown 再喂 Markdig) 稳: 不依赖 Markdig 怎么解析
+        // inline HTML blocks, 也不踩 CRLF / 嵌套缩进 等坑.
+        var bodyHtml = Markdown.ToHtml(body, Pipeline);
+        bodyHtml = TransformMermaidCodeBlocks(bodyHtml);
         bodyHtml = TransformCallouts(bodyHtml);
         return frontMatterHtml + bodyHtml;
     }
@@ -131,8 +135,8 @@ doc.innerHTML = `{escaped}`;
     public static string PrintHtml(string markdown, string title, PrintTarget target)
     {
         var (frontMatterHtml, body) = ExtractFrontMatter(markdown ?? "");
-        var bodyForRender = ConvertMermaidCodeBlocks(body);
-        var inner = Markdown.ToHtml(bodyForRender, Pipeline);
+        var inner = Markdown.ToHtml(body, Pipeline);
+        inner = TransformMermaidCodeBlocks(inner);
         inner = TransformCallouts(inner);
         inner = frontMatterHtml + inner;
 
@@ -290,21 +294,21 @@ doc.innerHTML = `{escaped}`;
     }
 
     /// <summary>
-    /// 把 ```mermaid 代码块替换成 &lt;div class="mermaid"&gt; 容器, mermaid.js 才能渲染.
-    /// Markdig 默认把它当代码块, 我们要在解析前 hijack.
+    /// 后处理 Markdig 输出: 把 &lt;pre&gt;&lt;code class="language-mermaid"&gt;...&lt;/code&gt;&lt;/pre&gt;
+    /// 换成 &lt;div class="mermaid"&gt;...&lt;/div&gt;, 让 mermaid.js 能识别并渲染.
+    ///
+    /// 内部内容已经是 Markdig 做完 HTML escape 的 (e.g. `--&gt;`), mermaid.js
+    /// 通过 element.textContent 读取时浏览器自动 decode 回去 (`-->`), 所以这里
+    /// 保持原样不动.
     /// </summary>
-    private static readonly Regex MermaidCodeFence = new(
-        @"```mermaid\s*\n(.*?)\n```",
-        RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex MermaidPreCodePattern = new(
+        @"<pre><code\s+class=""language-mermaid""[^>]*>(.*?)</code></pre>",
+        RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static string ConvertMermaidCodeBlocks(string markdown)
+    private static string TransformMermaidCodeBlocks(string html)
     {
-        return MermaidCodeFence.Replace(markdown, m =>
-        {
-            var inner = System.Net.WebUtility.HtmlEncode(m.Groups[1].Value);
-            // 用 HTML block 形式塞回 markdown, Markdig 会原样保留 (pass-through).
-            return $"\n\n<div class=\"mermaid\">{inner}</div>\n\n";
-        });
+        return MermaidPreCodePattern.Replace(html, m =>
+            $"<div class=\"mermaid\">{m.Groups[1].Value}</div>");
     }
 
     /// <summary>

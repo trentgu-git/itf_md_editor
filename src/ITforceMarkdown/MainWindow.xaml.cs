@@ -212,6 +212,36 @@ public partial class MainWindow : Window
         MenuRecent.Items.Add(clear);
     }
 
+    // ─────────────────── 键盘快捷键 ───────────────────
+    private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        if (!ctrl) return;
+        // 当 WebView2 / TextBox 在 focus 里时, 它们自己会处理 Ctrl+S/Z 等;
+        // 但我们的快捷键是 app 级别的, 让它们也生效.
+        switch (e.Key)
+        {
+            case Key.S:   Store.SaveCurrent(); e.Handled = true; break;
+            case Key.N:   Store.CreateDocument(); e.Handled = true; break;
+            case Key.O:
+                // 跟 MenuOpenFile_Click 一样的逻辑, 直接复用
+                MenuOpenFile_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.OemOpenBrackets:   /* 历史栈预留 */ break;
+            case Key.OemCloseBrackets:  /* 历史栈预留 */ break;
+            case Key.OemBackslash:
+                Store.IsSidebarHidden = !Store.IsSidebarHidden;
+                e.Handled = true;
+                break;
+            case Key.OemPlus:   Store.ZoomIn();    e.Handled = true; break;
+            case Key.OemMinus:  Store.ZoomOut();   e.Handled = true; break;
+            case Key.D0:        Store.ZoomReset(); e.Handled = true; break;
+            case Key.R:         Store.ReloadFromDisk(); e.Handled = true; break;
+            // Ctrl+F 不拦 — 让 WebView2 自家的 Find UI 接管 (browser default)
+        }
+    }
+
     // ─────────────────── Drag & Drop ───────────────────
     private void MainWindow_Drop(object sender, DragEventArgs e)
     {

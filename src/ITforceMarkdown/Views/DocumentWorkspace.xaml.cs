@@ -24,6 +24,7 @@ public partial class DocumentWorkspace : UserControl
             Store.PropertyChanged += OnStoreChanged;
             UpdateContent();
             UpdateHeader();
+            UpdateZoomLabel();
         };
         Unloaded += (_, _) => Store.PropertyChanged -= OnStoreChanged;
     }
@@ -46,7 +47,15 @@ public partial class DocumentWorkspace : UserControl
             case nameof(WorkspaceStore.IsSidebarHidden):
                 Dispatcher.BeginInvoke(new Action(ApplyFullscreen));
                 break;
+            case nameof(WorkspaceStore.DocumentZoomLevel):
+                Dispatcher.BeginInvoke(new Action(UpdateZoomLabel));
+                break;
         }
+    }
+
+    private void UpdateZoomLabel()
+    {
+        ZoomLabel.Text = $"{(int)Math.Round(Store.DocumentZoomLevel * 100)}%";
     }
 
     /// <summary>
@@ -244,4 +253,33 @@ public partial class DocumentWorkspace : UserControl
 
     private void Fullscreen_Click(object sender, RoutedEventArgs e)
         => Store.IsSidebarHidden = !Store.IsSidebarHidden;
+
+    // ─────────────────── Zoom / Reload / Find ───────────────────
+    private void ZoomIn_Click(object sender, RoutedEventArgs e)    => Store.ZoomIn();
+    private void ZoomOut_Click(object sender, RoutedEventArgs e)   => Store.ZoomOut();
+    private void ZoomReset_Click(object sender, RoutedEventArgs e) => Store.ZoomReset();
+
+    private void Reload_Click(object sender, RoutedEventArgs e) => Store.ReloadFromDisk();
+
+    /// <summary>
+    /// Find: 直接打开 WebView2 自带的浏览器 Find 工具条 (Ctrl+F UX 一致).
+    /// 长远可以做成 Mac 那种内联搜索框带匹配数 — 这版先用原生 Find 起步.
+    /// </summary>
+    private async void Find_Click(object sender, RoutedEventArgs e)
+    {
+        // 找到当前可见的 MarkdownPreview, 触发它的 ShowFind.
+        var preview = Store.EditorMode switch
+        {
+            EditorMode.Read => _readView,
+            EditorMode.Rich => _richView,
+            _ => null,
+        };
+        if (preview == null)
+        {
+            MessageBox.Show("Find is available in Read or Edit mode.", "Find",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        await preview.ShowFindAsync();
+    }
 }

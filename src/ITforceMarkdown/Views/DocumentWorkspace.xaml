@@ -42,8 +42,40 @@
                 BorderThickness="0,0,0,1"
                 Padding="20,10">
             <DockPanel>
-                <!-- 右侧: Mode 切换 + Save + Export PDF/Word + Close -->
+                <!-- 右侧: Find + Zoom + Mode + Reload/Delete/Clone/Fullscreen + Save + Export + Close -->
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <!-- Find: 简单输入框 + Ctrl+F (WebView2 原生 Find 也走这条路) -->
+                    <Button x:Name="BtnFind"
+                            Style="{StaticResource ActionButton}"
+                            Click="Find_Click"
+                            ToolTip="Find in document (Ctrl+F)">
+                        <TextBlock Text="🔍" FontSize="12"/>
+                    </Button>
+
+                    <Border Width="1" Margin="8,4" Background="{DynamicResource Brush.Line}"/>
+
+                    <!-- Zoom 控件: −  100%  + -->
+                    <Button x:Name="BtnZoomOut"
+                            Style="{StaticResource ActionButton}"
+                            Click="ZoomOut_Click"
+                            ToolTip="Zoom out (Ctrl-)">
+                        <TextBlock Text="−" FontSize="14" FontWeight="Bold"/>
+                    </Button>
+                    <Button x:Name="BtnZoomReset"
+                            Style="{StaticResource ActionButton}"
+                            Click="ZoomReset_Click"
+                            ToolTip="Reset zoom (Ctrl+0)">
+                        <TextBlock x:Name="ZoomLabel" Text="100%" FontSize="11"/>
+                    </Button>
+                    <Button x:Name="BtnZoomIn"
+                            Style="{StaticResource ActionButton}"
+                            Click="ZoomIn_Click"
+                            ToolTip="Zoom in (Ctrl+=)">
+                        <TextBlock Text="+" FontSize="14" FontWeight="Bold"/>
+                    </Button>
+
+                    <Border Width="1" Margin="8,4" Background="{DynamicResource Brush.Line}"/>
+
                     <Button x:Name="BtnRead" Content="Read"
                             Style="{StaticResource ModeButton}"
                             Click="ModeRead_Click"/>
@@ -56,6 +88,12 @@
 
                     <Border Width="1" Margin="8,4" Background="{DynamicResource Brush.Line}"/>
 
+                    <Button x:Name="BtnReload"
+                            Style="{StaticResource ActionButton}"
+                            Click="Reload_Click"
+                            ToolTip="Reload from disk (discard unsaved if any)">
+                        <TextBlock Text="↻" FontSize="14"/>
+                    </Button>
                     <Button x:Name="BtnDelete"
                             Style="{StaticResource ActionButton}"
                             Click="Delete_Click"

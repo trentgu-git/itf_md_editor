@@ -11,16 +11,12 @@
         Background="{DynamicResource Brush.Window}"
         AllowDrop="True"
         Drop="MainWindow_Drop"
+        PreviewKeyDown="MainWindow_PreviewKeyDown"
         Icon="{x:Null}"><!-- 真正的图标在 code-behind 按 Local/Pro flavor 设, 这里仅占位 -->
 
-    <Window.InputBindings>
-        <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}"/>
-        <KeyBinding Key="N" Modifiers="Control" Command="{Binding NewDocCommand}"/>
-        <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenFileCommand}"/>
-        <KeyBinding Key="OemOpenBrackets" Modifiers="Control" Command="{Binding BackCommand}"/>
-        <KeyBinding Key="OemCloseBrackets" Modifiers="Control" Command="{Binding ForwardCommand}"/>
-        <KeyBinding Key="OemBackslash" Modifiers="Control" Command="{Binding ToggleSidebarCommand}"/>
-    </Window.InputBindings>
+    <!-- 老的 KeyBinding {Binding XxxCommand} 没生效 (没有 RelayCommand 也没
+         DataContext). 全部改走 code-behind PreviewKeyDown, 见 MainWindow_KeyDown. -->
+    <Window.InputBindings/>
 
     <DockPanel>
         <!-- 顶部菜单 -->

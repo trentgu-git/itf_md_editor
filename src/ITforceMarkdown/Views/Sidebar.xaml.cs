@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -20,6 +22,12 @@ namespace ITforceMarkdown.Views;
 public partial class Sidebar : UserControl
 {
     private WorkspaceStore Store => App.Store;
+
+    /// <summary>
+    /// 搜索的 CancellationToken — 用户继续打字时取消上一次的搜索, 防止后台
+    /// 任务堆积; 用户清空搜索框时也取消, 立刻回 workspace 树.
+    /// </summary>
+    private CancellationTokenSource? _searchCts;
 
     public Sidebar()
     {
@@ -60,12 +68,27 @@ public partial class Sidebar : UserControl
     // ─────────────────── 渲染 ───────────────────
     private void Rebuild()
     {
+        // 任何 rebuild 触发都先取消还在跑的搜索 — 旧搜索完成后回 UI 时
+        // 会发现 token cancelled 直接 return, 不会污染新视图.
+        _searchCts?.Cancel();
+
         ContentHost.Children.Clear();
 
         var query = Store.SearchText?.Trim();
         if (!string.IsNullOrWhiteSpace(query))
         {
-            RenderSearchResults(query);
+            // 显示一个 loading 提示, 让用户知道在搜.
+            ContentHost.Children.Add(new TextBlock
+            {
+                Text = "Searching…",
+                Margin = new Thickness(16),
+                Foreground = (Brush)FindResource("Brush.Muted"),
+                FontSize = 12,
+            });
+            // 启动后台搜索. RenderSearchResultsAsync 在 ContinueWith 里 marshal
+            // 回 UI 线程更新 ContentHost (不能在后台线程 touch UI).
+            _searchCts = new CancellationTokenSource();
+            _ = RenderSearchResultsAsync(query, _searchCts.Token);
         }
         else
         {
@@ -99,82 +122,126 @@ public partial class Sidebar : UserControl
         return n;
     }
 
-    // ─────────────────── 搜索结果渲染 ───────────────────
-    private void RenderSearchResults(string query)
+    // ─────────────────── 搜索结果渲染 (异步, 可取消) ───────────────────
+    /// <summary>
+    /// 后台扫描所有 workspace 里的 .md 文件, 全文找子串. 大 workspace 也
+    /// 不会卡 UI 因为整个 IO + 字符串匹配都在 Task.Run 里跑.
+    ///
+    /// 鲁棒性 (修过的崩溃模式):
+    ///   - 取消 token 频繁 check, 用户继续打字 → 立刻 bail 不浪费 IO
+    ///   - 大文件读取上限 (跳过 &gt; 2MB 的, 避免误读到压缩包 / SQLite 等)
+    ///   - 每个文件 try/catch, 单个文件读失败不影响整个搜索
+    ///   - 结果上限 200, 取到就停 (不再像老版扫完所有匹配再 Take(80))
+    /// </summary>
+    private async Task RenderSearchResultsAsync(string query, CancellationToken ct)
     {
-        var results = new List<(Workspace ws, string filePath, string title, string rel, string snippet, int line)>();
+        // 取所有 workspace + 树的快照 (后续在后台线程读, 不能再 touch Store).
+        var snapshots = new List<(Workspace ws, List<FileNode> tree)>();
         foreach (var ws in Store.LocalWorkspaces)
         {
-            if (!Store.WorkspaceTrees.TryGetValue(ws.Id, out var tree)) continue;
-            CollectFiles(tree, files => { });
-            foreach (var f in EnumerateFilesFlat(tree))
+            if (Store.WorkspaceTrees.TryGetValue(ws.Id, out var t))
+                snapshots.Add((ws, t));
+        }
+
+        // debounce 短暂等待 — 用户连续打字时, 取消 propagate 过来就直接 return.
+        // 同时也让 UI 显示 "Searching…" 一段时间, 别一字一闪.
+        try { await Task.Delay(180, ct); }
+        catch (OperationCanceledException) { return; }
+
+        // 后台扫.
+        var results = await Task.Run(() =>
+        {
+            var hits = new List<(string ws, string filePath, string title, string rel, string snippet, int line)>();
+            foreach (var (ws, tree) in snapshots)
             {
-                try
+                if (ct.IsCancellationRequested) return hits;
+                foreach (var f in EnumerateFilesFlat(tree))
                 {
-                    var lines = File.ReadAllLines(f.Path);
-                    for (int i = 0; i < lines.Length; i++)
+                    if (ct.IsCancellationRequested) return hits;
+                    try
                     {
-                        if (lines[i].Contains(query, StringComparison.OrdinalIgnoreCase))
+                        // 跳过过大的文件 (>2MB) — 用户拖 PDF/zip 进 workspace 时不卡住
+                        var info = new FileInfo(f.Path);
+                        if (!info.Exists || info.Length > 2 * 1024 * 1024) continue;
+
+                        var lines = File.ReadAllLines(f.Path);
+                        for (int i = 0; i < lines.Length; i++)
                         {
-                            var rel = Path.GetRelativePath(ws.Path, f.Path);
-                            results.Add((ws, f.Path, Path.GetFileNameWithoutExtension(f.Path),
-                                rel, lines[i].Trim(), i + 1));
-                            if (results.Count > 200) goto done;
+                            if (ct.IsCancellationRequested) return hits;
+                            if (lines[i].Contains(query, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string rel;
+                                try { rel = Path.GetRelativePath(ws.Path, f.Path); }
+                                catch { rel = f.Path; }
+                                hits.Add((ws.Path, f.Path,
+                                    Path.GetFileNameWithoutExtension(f.Path),
+                                    rel, lines[i].Trim(), i + 1));
+                                if (hits.Count >= 200) return hits;
+                            }
                         }
                     }
+                    catch { /* skip unreadable */ }
                 }
-                catch { /* skip unreadable */ }
             }
-        }
-        done:
-        foreach (var r in results.Take(80))
+            return hits;
+        }, ct).ConfigureAwait(false);
+
+        // 回 UI 线程渲染结果. 期间用户可能继续打字 → token cancelled → 不动 UI.
+        if (ct.IsCancellationRequested) return;
+        await Dispatcher.InvokeAsync(() =>
         {
-            var b = new Button
+            if (ct.IsCancellationRequested) return;
+            ContentHost.Children.Clear();
+            if (results.Count == 0)
             {
-                Margin = new Thickness(8, 2, 8, 2),
-                Padding = new Thickness(10, 8, 10, 8),
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                BorderThickness = new Thickness(0),
-                Background = (Brush)FindResource("Brush.Card"),
-                Cursor = Cursors.Hand,
-            };
-            var sp = new StackPanel();
-            sp.Children.Add(new TextBlock
+                ContentHost.Children.Add(new TextBlock
+                {
+                    Text = "No results.",
+                    Margin = new Thickness(16),
+                    Foreground = (Brush)FindResource("Brush.Muted"),
+                    FontSize = 12,
+                });
+                return;
+            }
+            foreach (var r in results.Take(80))
             {
-                Text = r.title,
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 12,
-                Foreground = (Brush)FindResource("Brush.Ink"),
-            });
-            sp.Children.Add(new TextBlock
-            {
-                Text = $"line {r.line} · {r.rel}",
-                FontSize = 10,
-                Foreground = (Brush)FindResource("Brush.Muted"),
-                Margin = new Thickness(0, 2, 0, 4),
-            });
-            sp.Children.Add(new TextBlock
-            {
-                Text = r.snippet,
-                FontSize = 11,
-                Foreground = (Brush)FindResource("Brush.Muted"),
-                TextWrapping = TextWrapping.Wrap,
-            });
-            b.Content = sp;
-            var capturedPath = r.filePath;
-            b.Click += (_, _) => Store.OpenExternalFile(capturedPath);
-            ContentHost.Children.Add(b);
-        }
-        if (results.Count == 0)
-        {
-            ContentHost.Children.Add(new TextBlock
-            {
-                Text = "No results.",
-                Margin = new Thickness(16),
-                Foreground = (Brush)FindResource("Brush.Muted"),
-                FontSize = 12,
-            });
-        }
+                var b = new Button
+                {
+                    Margin = new Thickness(8, 2, 8, 2),
+                    Padding = new Thickness(10, 8, 10, 8),
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    BorderThickness = new Thickness(0),
+                    Background = (Brush)FindResource("Brush.Card"),
+                    Cursor = Cursors.Hand,
+                };
+                var sp = new StackPanel();
+                sp.Children.Add(new TextBlock
+                {
+                    Text = r.title,
+                    FontWeight = FontWeights.SemiBold,
+                    FontSize = 12,
+                    Foreground = (Brush)FindResource("Brush.Ink"),
+                });
+                sp.Children.Add(new TextBlock
+                {
+                    Text = $"line {r.line} · {r.rel}",
+                    FontSize = 10,
+                    Foreground = (Brush)FindResource("Brush.Muted"),
+                    Margin = new Thickness(0, 2, 0, 4),
+                });
+                sp.Children.Add(new TextBlock
+                {
+                    Text = r.snippet,
+                    FontSize = 11,
+                    Foreground = (Brush)FindResource("Brush.Muted"),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                b.Content = sp;
+                var capturedPath = r.filePath;
+                b.Click += (_, _) => Store.OpenExternalFile(capturedPath);
+                ContentHost.Children.Add(b);
+            }
+        });
     }
 
     private static IEnumerable<FileNode> EnumerateFilesFlat(IEnumerable<FileNode> nodes)
