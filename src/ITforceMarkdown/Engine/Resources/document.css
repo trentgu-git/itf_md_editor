@@ -97,8 +97,10 @@ body {
   display: flex;
   justify-content: center;
 }
+
+/* 阅读宽度: 1000px (≈ A4 + 26%) — A4 太窄读着拥挤. 比窗口窄时改 100%. */
 .page {
-  width: 794px;
+  width: 1000px;
   max-width: 100%;
   min-height: calc(100vh - 104px);
   margin: 0 auto;
@@ -148,13 +150,16 @@ code {
   border-radius: 5px;
   font: 0.92em "Cascadia Code", "Consolas", ui-monospace, Menlo, monospace;
 }
+
+/* 代码块: 浅灰底 + 暗色文字 + 无圆角 (跟 Mac 端一致, 配 hljs github light 主题). */
 pre {
   overflow: auto;
   margin: 1.25rem 0;
   padding: 1rem;
-  background: var(--pre-bg);
-  color: var(--pre-fg);
-  border-radius: 8px;
+  background: #F1F1F1;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-radius: 0;
 }
 pre code {
   padding: 0;
@@ -162,6 +167,7 @@ pre code {
   background: transparent;
   color: inherit;
 }
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -187,3 +193,117 @@ th {
 img { max-width: 100%; border-radius: 8px; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 2rem 0; }
 ::selection { background: rgba(245, 166, 35, 0.32); }
+
+/* ─────────────────────────────────────────────────
+   下面是 Tier 1 新加内容: mermaid 容器 + 全屏 modal + callouts +
+   任务列表 + front matter + 图片 zoom 提示
+   ───────────────────────────────────────────────── */
+
+/* Mermaid: 渲染前是 div.mermaid (源码 textContent), 渲染后内部 svg */
+div.mermaid {
+  text-align: center;
+  margin: 1.5rem 0;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 0.9em;
+  color: var(--muted);
+  cursor: zoom-in;
+  position: relative;
+}
+div.mermaid svg { max-width: 100%; height: auto; }
+
+/* 全屏 modal overlay — 点 mermaid 图 / 普通 <img> 后弹出 */
+#__mermaid_overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: zoom-out;
+  padding: 24px;
+}
+#__mermaid_overlay svg,
+#__mermaid_overlay img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+#__mermaid_overlay_close {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  color: white;
+  font-size: 22px;
+  font-weight: 300;
+  cursor: pointer;
+  line-height: 1;
+  background: rgba(255,255,255,0.1);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 文档里普通图片: 鼠标悬停时给 zoom-in 提示 */
+#doc img:not(.no-zoom) { cursor: zoom-in; }
+
+/* GitHub 风格 callout: >[!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] */
+blockquote.callout {
+  border-left: 4px solid var(--accent);
+  background: var(--soft);
+  padding: 0.6rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+}
+blockquote.callout .callout-title {
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+blockquote.callout-note     { border-left-color: #0969da; }
+blockquote.callout-tip      { border-left-color: #1a7f37; }
+blockquote.callout-important{ border-left-color: #8250df; }
+blockquote.callout-warning  { border-left-color: #9a6700; }
+blockquote.callout-caution  { border-left-color: #cf222e; }
+blockquote.callout-note     .callout-title { color: #0969da; }
+blockquote.callout-tip      .callout-title { color: #1a7f37; }
+blockquote.callout-important .callout-title{ color: #8250df; }
+blockquote.callout-warning  .callout-title { color: #9a6700; }
+blockquote.callout-caution  .callout-title { color: #cf222e; }
+
+/* 任务列表 (Markdig 已经渲染成 ul > li > input[type=checkbox]) */
+ul.contains-task-list { list-style: none; padding-left: 1.2em; }
+li.task-list-item > input[type="checkbox"] {
+  margin-right: 0.4em;
+  transform: translateY(1px);
+  accent-color: var(--accent);
+}
+
+/* Front matter (YAML) 信息块 */
+details.front-matter {
+  margin: 0 0 1rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+details.front-matter > summary { cursor: pointer; user-select: none; }
+details.front-matter pre {
+  margin: 0.4rem 0 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  white-space: pre-wrap;
+  border: none;
+}

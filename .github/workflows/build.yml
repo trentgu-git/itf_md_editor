@@ -24,6 +24,12 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# GitHub 2024 起把默认 GITHUB_TOKEN 改成 read-only —
+# 创建 Release 必须显式给 contents: write, 否则 softprops/action-gh-release
+# 报 "Resource not accessible by integration".
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest

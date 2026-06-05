@@ -22,8 +22,118 @@ function scrollToHeading(id) {
 }
 
 // ─── 主机调用接口 (WebView2.ExecuteScriptAsync) ───
-window.__setContent = (html) => { doc.innerHTML = html; };
+window.__setContent = (html) => {
+  doc.innerHTML = html;
+  // 重设 content 后立刻跑一遍渲染管线 (mermaid / hljs / KaTeX).
+  // 跟 host 注入新 markdown 时一致.
+  window.__renderEnhancements();
+};
 window.__scrollToHeading = (id) => scrollToHeading(id);
+
+// ─── Tier 1 渲染增强 (mermaid / hljs / KaTeX / 图片点击放大) ───
+//
+// 这些库通过 MarkdownEngine.DocumentHtml 把 <script>/<style> 标签注入,
+// 所以这里只要调用对应的 init/run 方法.
+
+window.__renderEnhancements = function () {
+  // 1) Mermaid: div.mermaid 源码 → SVG
+  if (window.mermaid && window.mermaid.run) {
+    const nodes = doc.querySelectorAll('div.mermaid:not([data-processed="true"])');
+    if (nodes.length) {
+      try {
+        const isDark =
+          document.documentElement.classList.contains('force-dark') ||
+          (!document.documentElement.classList.contains('force-light') &&
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: isDark ? 'dark' : 'default',
+          securityLevel: 'loose',
+        });
+        window.mermaid.run({ nodes });
+      } catch (e) { console.error('mermaid run failed:', e); }
+    }
+  }
+
+  // 2) highlight.js: 给 <pre><code class="language-xxx"> 着色
+  if (window.hljs && typeof window.hljs.highlightElement === 'function') {
+    try {
+      doc.querySelectorAll('pre code').forEach(function (block) {
+        if (block.dataset.highlighted) return;  // 避免重复着色
+        window.hljs.highlightElement(block);
+      });
+    } catch (e) { console.error('hljs failed:', e); }
+  }
+
+  // 3) KaTeX: 自动渲染 $...$ / $$...$$
+  if (window.renderMathInElement) {
+    try {
+      window.renderMathInElement(doc, {
+        delimiters: [
+          { left: '$$', right: '$$', display: true  },
+          { left: '\\[', right: '\\]', display: true  },
+          { left: '$',  right: '$',  display: false },
+          { left: '\\(', right: '\\)', display: false },
+        ],
+        throwOnError: false,
+        ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+      });
+    } catch (e) { console.error('KaTeX failed:', e); }
+  }
+};
+
+// 首次加载就跑一次 (HTML body 已经有 doc.innerHTML)
+window.__renderEnhancements();
+
+// ─── 图片 / mermaid 点击放大 (event delegation) ───
+//
+// 用 mousedown + capture 抢在 contenteditable cursor placement 之前.
+doc.addEventListener('mousedown', function (ev) {
+  const target = ev.target;
+  if (!target || !target.closest) return;
+  // 1) mermaid 图 → 弹 SVG
+  const md = target.closest('div.mermaid');
+  if (md) {
+    const svg = md.querySelector('svg');
+    if (!svg) return;  // mermaid 还没渲染好就不弹空 modal
+    ev.preventDefault();
+    ev.stopPropagation();
+    window.__openZoomModal(svg.outerHTML);
+    return;
+  }
+  // 2) 普通 <img> → 弹原图
+  if (target.tagName === 'IMG' && !target.classList.contains('no-zoom')) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    window.__openZoomModal('<img src="' + target.src + '" alt="' + (target.alt || '') + '">');
+    return;
+  }
+}, true);
+
+window.__openZoomModal = function (innerHtml) {
+  window.__closeZoomModal();
+  const overlay = document.createElement('div');
+  overlay.id = '__mermaid_overlay';
+  overlay.innerHTML = innerHtml;
+  const close = document.createElement('div');
+  close.id = '__mermaid_overlay_close';
+  close.textContent = '×';
+  overlay.appendChild(close);
+  overlay.addEventListener('click', window.__closeZoomModal);
+  document.body.appendChild(overlay);
+  window.__zoomEscHandler = (ev) => {
+    if (ev.key === 'Escape') window.__closeZoomModal();
+  };
+  document.addEventListener('keydown', window.__zoomEscHandler);
+};
+window.__closeZoomModal = function () {
+  const ov = document.getElementById('__mermaid_overlay');
+  if (ov) ov.remove();
+  if (window.__zoomEscHandler) {
+    document.removeEventListener('keydown', window.__zoomEscHandler);
+    window.__zoomEscHandler = null;
+  }
+};
 
 // 富文本格式化命令 — 工具栏按钮通过 ExecuteScriptAsync 调这些。
 // execCommand 虽然被 W3C 标记为 deprecated, 但在所有 Chromium 衍生品里

@@ -52,9 +52,9 @@ pre {
   page-break-inside: avoid;
   margin: 0.6em 0;
   padding: 8__UNIT__ 10__UNIT__;
-  background: #f6f8fa;
+  background: #F1F1F1;
   border: 1px solid #e5e7eb;
-  border-radius: 4px;
+  border-radius: 0;
   font-family: "Cascadia Code", "Consolas", monospace;
   font-size: 9__UNIT__;
   line-height: 1.45;
@@ -63,6 +63,20 @@ pre {
   color: #1f2937;
 }
 pre code { padding: 0; border: 0; background: transparent; font-size: inherit; }
+/* GitHub 风格 callout — 跟 document.css 一致 */
+blockquote.callout { padding: 0.5em 0.8em; margin: 0.6em 0; border-left: 3px solid #f5a623; background: #faf7f1; border-radius: 0 4px 4px 0; }
+blockquote.callout .callout-title { font-weight: 700; margin-bottom: 0.2em; }
+blockquote.callout-note      { border-left-color: #0969da; }
+blockquote.callout-tip       { border-left-color: #1a7f37; }
+blockquote.callout-important { border-left-color: #8250df; }
+blockquote.callout-warning   { border-left-color: #9a6700; }
+blockquote.callout-caution   { border-left-color: #cf222e; }
+/* 任务列表 */
+ul.contains-task-list { list-style: none; padding-left: 1.2em; }
+li.task-list-item > input[type="checkbox"] { margin-right: 0.4em; }
+/* Front matter */
+details.front-matter { padding: 0.4em 0.8em; background: #faf7f1; border: 1px solid #e6dece; border-radius: 4px; font-size: 0.85em; color: #6b7280; margin: 0 0 0.8em; }
+details.front-matter pre { background: transparent; border: none; padding: 0; margin: 0.3em 0 0; }
 table {
   width: 100%;
   border-collapse: collapse;

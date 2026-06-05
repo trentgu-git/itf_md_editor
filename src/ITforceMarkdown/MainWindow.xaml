@@ -26,14 +26,14 @@
         <!-- 顶部菜单 -->
         <Menu DockPanel.Dock="Top"
               Background="{DynamicResource Brush.ToolbarBg}">
-            <MenuItem Header="_File">
-                <MenuItem Header="_New" InputGestureText="Ctrl+N" Click="MenuNew_Click"/>
-                <MenuItem Header="_Open File…" InputGestureText="Ctrl+O" Click="MenuOpenFile_Click"/>
-                <MenuItem Header="Open _Folder…" Click="MenuOpenFolder_Click"/>
-                <MenuItem x:Name="MenuRecent" Header="Open _Recent"/>
+            <MenuItem x:Name="MenuFile" Header="_File">
+                <MenuItem x:Name="MenuNew"        Header="_New"           InputGestureText="Ctrl+N" Click="MenuNew_Click"/>
+                <MenuItem x:Name="MenuOpenFile"   Header="_Open File…"    InputGestureText="Ctrl+O" Click="MenuOpenFile_Click"/>
+                <MenuItem x:Name="MenuOpenFolder" Header="Open _Folder…"  Click="MenuOpenFolder_Click"/>
+                <MenuItem x:Name="MenuRecent"     Header="Open _Recent"/>
                 <Separator/>
-                <MenuItem Header="_Save" InputGestureText="Ctrl+S" Click="MenuSave_Click"/>
-                <MenuItem Header="_Close Document" Click="MenuClose_Click"/>
+                <MenuItem x:Name="MenuSave"       Header="_Save"          InputGestureText="Ctrl+S" Click="MenuSave_Click"/>
+                <MenuItem x:Name="MenuClose"      Header="_Close Document" Click="MenuClose_Click"/>
                 <Separator x:Name="MenuGitLabSep1" Visibility="Collapsed"/>
                 <!-- Pro only: GitLab 子菜单, code-behind 按 flavor 显示 -->
                 <MenuItem x:Name="MenuGitLab" Header="_GitLab" Visibility="Collapsed">
@@ -41,45 +41,51 @@
                     <MenuItem x:Name="MenuGitLabSync" Header="Sync _Now" Click="MenuGitLabSync_Click"/>
                 </MenuItem>
                 <Separator/>
-                <MenuItem Header="Export _PDF…" Click="MenuExportPdf_Click"/>
-                <MenuItem Header="Export _Word…" Click="MenuExportWord_Click"/>
+                <MenuItem x:Name="MenuExportPdf"  Header="Export _PDF…"   Click="MenuExportPdf_Click"/>
+                <MenuItem x:Name="MenuExportWord" Header="Export _Word…"  Click="MenuExportWord_Click"/>
                 <Separator/>
-                <MenuItem Header="E_xit" Click="MenuExit_Click"/>
+                <MenuItem x:Name="MenuExit"       Header="E_xit"          Click="MenuExit_Click"/>
             </MenuItem>
-            <MenuItem Header="_Edit">
-                <MenuItem Command="ApplicationCommands.Undo"/>
-                <MenuItem Command="ApplicationCommands.Redo"/>
+            <MenuItem x:Name="MenuEdit" Header="_Edit">
+                <MenuItem x:Name="MenuEditUndo"   Command="ApplicationCommands.Undo"/>
+                <MenuItem x:Name="MenuEditRedo"   Command="ApplicationCommands.Redo"/>
                 <Separator/>
-                <MenuItem Command="ApplicationCommands.Cut"/>
-                <MenuItem Command="ApplicationCommands.Copy"/>
-                <MenuItem Command="ApplicationCommands.Paste"/>
+                <MenuItem x:Name="MenuEditCut"    Command="ApplicationCommands.Cut"/>
+                <MenuItem x:Name="MenuEditCopy"   Command="ApplicationCommands.Copy"/>
+                <MenuItem x:Name="MenuEditPaste"  Command="ApplicationCommands.Paste"/>
                 <Separator/>
-                <MenuItem Command="ApplicationCommands.SelectAll"/>
+                <MenuItem x:Name="MenuEditSelectAll" Command="ApplicationCommands.SelectAll"/>
             </MenuItem>
-            <MenuItem Header="_View">
-                <MenuItem Header="_Read"   Click="MenuModeRead_Click"/>
-                <MenuItem Header="_Edit"   Click="MenuModeRich_Click"/>
-                <MenuItem Header="_Source" Click="MenuModeSource_Click"/>
+            <MenuItem x:Name="MenuView" Header="_View">
+                <MenuItem x:Name="MenuModeRead"   Header="_Read"   Click="MenuModeRead_Click"/>
+                <MenuItem x:Name="MenuModeRich"   Header="_Edit"   Click="MenuModeRich_Click"/>
+                <MenuItem x:Name="MenuModeSource" Header="_Source" Click="MenuModeSource_Click"/>
                 <Separator/>
-                <MenuItem Header="_Appearance">
+                <MenuItem x:Name="MenuAppearance" Header="_Appearance">
                     <MenuItem x:Name="MenuApSystem" Header="Follow System" Click="MenuApSystem_Click" IsCheckable="True"/>
                     <MenuItem x:Name="MenuApLight"  Header="Light"  Click="MenuApLight_Click"  IsCheckable="True"/>
                     <MenuItem x:Name="MenuApDark"   Header="Dark"   Click="MenuApDark_Click"   IsCheckable="True"/>
                 </MenuItem>
+                <!-- 语言切换 — code-behind 按 store.MenuLanguage 设 IsChecked -->
+                <MenuItem x:Name="MenuLanguage" Header="_Language">
+                    <MenuItem x:Name="MenuLangSystem"  Header="Follow System / 跟随系统" Click="MenuLangSystem_Click"  IsCheckable="True"/>
+                    <MenuItem x:Name="MenuLangEnglish" Header="English"                  Click="MenuLangEnglish_Click" IsCheckable="True"/>
+                    <MenuItem x:Name="MenuLangChinese" Header="中文"                     Click="MenuLangChinese_Click" IsCheckable="True"/>
+                </MenuItem>
                 <Separator/>
-                <MenuItem Header="Toggle _Sidebar" InputGestureText="Ctrl+\" Click="MenuToggleSidebar_Click"/>
+                <MenuItem x:Name="MenuToggleSidebar" Header="Toggle _Sidebar" InputGestureText="Ctrl+\" Click="MenuToggleSidebar_Click"/>
                 <Separator/>
-                <MenuItem Header="_Back"    InputGestureText="Ctrl+[" Click="MenuBack_Click"/>
-                <MenuItem Header="_Forward" InputGestureText="Ctrl+]" Click="MenuForward_Click"/>
+                <MenuItem x:Name="MenuBack"    Header="_Back"    InputGestureText="Ctrl+[" Click="MenuBack_Click"/>
+                <MenuItem x:Name="MenuForward" Header="_Forward" InputGestureText="Ctrl+]" Click="MenuForward_Click"/>
             </MenuItem>
-            <MenuItem Header="_Window">
-                <MenuItem Header="_Minimize" Click="MenuMinimize_Click"/>
-                <MenuItem Header="_Maximize / Restore" Click="MenuMaxRestore_Click"/>
+            <MenuItem x:Name="MenuWindow" Header="_Window">
+                <MenuItem x:Name="MenuWindowMin"        Header="_Minimize"          Click="MenuMinimize_Click"/>
+                <MenuItem x:Name="MenuWindowMaxRestore" Header="_Maximize / Restore" Click="MenuMaxRestore_Click"/>
             </MenuItem>
-            <MenuItem Header="_Help">
-                <MenuItem Header="ITforce Markdown _Help" Click="MenuHelp_Click"/>
+            <MenuItem x:Name="MenuHelp" Header="_Help">
+                <MenuItem x:Name="MenuHelpDocs"  Header="ITforce Markdown _Help" Click="MenuHelp_Click"/>
                 <Separator/>
-                <MenuItem Header="_About" Click="MenuAbout_Click"/>
+                <MenuItem x:Name="MenuHelpAbout" Header="_About" Click="MenuAbout_Click"/>
             </MenuItem>
         </Menu>
 

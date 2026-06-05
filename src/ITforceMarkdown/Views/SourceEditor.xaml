@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Grid Background="{DynamicResource Brush.EditorBg}">
-        <Border MaxWidth="794"
+        <!-- 跟 .page 的 1000px 一致 (A4 + 26%, 原 A4 794 太挤) -->
+        <Border MaxWidth="1000"
                 Margin="24,24,24,24"
                 Background="{DynamicResource Brush.Card}"
                 BorderBrush="{DynamicResource Brush.Line}"

@@ -30,6 +30,7 @@ public partial class WorkspaceStore : ObservableObject
     private const string KeyLocalWorkspaces = "localWorkspaces";
     private const string KeyRecentDocuments = "recentDocuments";
     private const string KeyAppearance      = "appearance";
+    private const string KeyMenuLanguage    = "menuLanguage";
     private const string KeyHideEmpty       = "hideEmptyFolders";
     private const string KeyLastFile        = "lastSelectedFile";
     private const string KeyGitLabSettings  = "gitLabSettings";  // Pro only, Local 不暴露 UI
@@ -61,6 +62,10 @@ public partial class WorkspaceStore : ObservableObject
     /// <summary>外观偏好 (System / Light / Dark)。</summary>
     [ObservableProperty]
     private AppearancePreference appearance = AppearancePreference.System;
+
+    /// <summary>菜单语言 (System / English / Chinese), 持久化到 menuLanguage.json.</summary>
+    [ObservableProperty]
+    private MenuLanguage menuLanguage = MenuLanguage.System;
 
     /// <summary>全局 sidebar 是否完全隐藏 (全屏阅读)。</summary>
     [ObservableProperty]
@@ -184,6 +189,10 @@ public partial class WorkspaceStore : ObservableObject
         if (Enum.TryParse<AppearancePreference>(appearanceRaw, ignoreCase: true, out var ap))
             Appearance = ap;
 
+        var langRaw = PersistenceService.LoadString(KeyMenuLanguage);
+        if (Enum.TryParse<MenuLanguage>(langRaw, ignoreCase: true, out var ml))
+            MenuLanguage = ml;
+
         var hideEmpty = PersistenceService.LoadValue<bool>(KeyHideEmpty);
         if (hideEmpty.HasValue) HideEmptyFoldersGlobal = hideEmpty.Value;
 
@@ -218,6 +227,9 @@ public partial class WorkspaceStore : ObservableObject
     // ─────────────────── persistence reactions ───────────────────
     partial void OnAppearanceChanged(AppearancePreference value)
         => PersistenceService.SaveString(KeyAppearance, value.ToString());
+
+    partial void OnMenuLanguageChanged(MenuLanguage value)
+        => PersistenceService.SaveString(KeyMenuLanguage, value.ToString());
 
     partial void OnHideEmptyFoldersGlobalChanged(bool value)
         => PersistenceService.Save(KeyHideEmpty, value);

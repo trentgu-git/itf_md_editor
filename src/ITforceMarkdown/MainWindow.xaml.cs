@@ -44,16 +44,19 @@ public partial class MainWindow : Window
         }
         catch { /* 图标加载失败不影响功能 */ }
 
-        // Pro flavor 才显示 GitLab 子菜单
-        if (App.IsProEdition)
-        {
-            MenuGitLab.Visibility = Visibility.Visible;
-            MenuGitLabSep1.Visibility = Visibility.Visible;
-        }
+        // Pro flavor 才显示 GitLab 子菜单. 用 #if PRO 而不是
+        // `if (App.IsProEdition)` — 后者 IsProEdition 是 const bool,
+        // Local build 时编译器直接判定 body unreachable, 报 CS0162 warning.
+#if PRO
+        MenuGitLab.Visibility = Visibility.Visible;
+        MenuGitLabSep1.Visibility = Visibility.Visible;
+#endif
 
         Store.PropertyChanged += OnStoreChanged;
         UpdateTitle();
         UpdateAppearanceCheck();
+        UpdateLanguageCheck();
+        ApplyLocalization();
         BuildRecentMenu();
 
         Store.RecentDocuments.CollectionChanged += (_, _) => Dispatcher.BeginInvoke(new Action(BuildRecentMenu));
@@ -72,6 +75,14 @@ public partial class MainWindow : Window
                 break;
             case nameof(WorkspaceStore.Appearance):
                 Dispatcher.BeginInvoke(new Action(UpdateAppearanceCheck));
+                break;
+            case nameof(WorkspaceStore.MenuLanguage):
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    UpdateLanguageCheck();
+                    ApplyLocalization();
+                    BuildRecentMenu();  // "Clear Menu" label 也跟着切
+                }));
                 break;
             case nameof(WorkspaceStore.StatusMessage):
                 Dispatcher.BeginInvoke(new Action(() => StatusBar.Text = Store.StatusMessage));
@@ -95,6 +106,79 @@ public partial class MainWindow : Window
         MenuApDark.IsChecked   = Store.Appearance == AppearancePreference.Dark;
     }
 
+    private void UpdateLanguageCheck()
+    {
+        MenuLangSystem.IsChecked  = Store.MenuLanguage == Models.MenuLanguage.System;
+        MenuLangEnglish.IsChecked = Store.MenuLanguage == Models.MenuLanguage.English;
+        MenuLangChinese.IsChecked = Store.MenuLanguage == Models.MenuLanguage.Chinese;
+    }
+
+    /// <summary>
+    /// 根据 Store.MenuLanguage 重设所有 MenuItem.Header. 加下划线表示
+    /// Alt+letter 快捷键. Appearance / Language 子选项的标签也一并切.
+    /// </summary>
+    private void ApplyLocalization()
+    {
+        var lang = Store.MenuLanguage;
+        string T(string en, string zh) => L10n.T(lang, en, zh);
+
+        // ── File ──
+        MenuFile.Header         = T("_File", "文件(_F)");
+        MenuNew.Header          = T("_New", "新建(_N)");
+        MenuOpenFile.Header     = T("_Open File…", "打开文件…(_O)");
+        MenuOpenFolder.Header   = T("Open _Folder…", "打开文件夹…(_F)");
+        MenuRecent.Header       = T("Open _Recent", "最近打开(_R)");
+        MenuSave.Header         = T("_Save", "保存(_S)");
+        MenuClose.Header        = T("_Close Document", "关闭文档(_C)");
+        MenuExportPdf.Header    = T("Export _PDF…", "导出为 PDF…(_P)");
+        MenuExportWord.Header   = T("Export _Word…", "导出为 Word…(_W)");
+        MenuExit.Header         = T("E_xit", "退出(_X)");
+
+        // Pro only — GitLab. flavor 关闭时这俩还在但 visibility=collapsed.
+        MenuGitLab.Header         = T("_GitLab", "GitLab(_G)");
+        MenuGitLabSettings.Header = T("GitLab _Settings…", "GitLab 设置…(_S)");
+        MenuGitLabSync.Header     = T("Sync _Now", "立即同步(_N)");
+
+        // ── Edit ──
+        MenuEdit.Header            = T("_Edit", "编辑(_E)");
+        MenuEditUndo.Header        = T("Undo",    "撤销");
+        MenuEditRedo.Header        = T("Redo",    "重做");
+        MenuEditCut.Header         = T("Cut",     "剪切");
+        MenuEditCopy.Header        = T("Copy",    "复制");
+        MenuEditPaste.Header       = T("Paste",   "粘贴");
+        MenuEditSelectAll.Header   = T("Select All", "全选");
+
+        // ── View ──
+        MenuView.Header           = T("_View", "视图(_V)");
+        MenuModeRead.Header       = T("_Read",   "阅读(_R)");
+        MenuModeRich.Header       = T("_Edit",   "编辑(_E)");
+        MenuModeSource.Header     = T("_Source", "源码(_S)");
+        MenuAppearance.Header     = T("_Appearance", "外观(_A)");
+        MenuApSystem.Header       = T("Follow System", "跟随系统");
+        MenuApLight.Header        = T("Light",         "浅色");
+        MenuApDark.Header         = T("Dark",          "深色");
+        MenuLanguage.Header       = T("_Language", "语言(_L)");
+        // Language 三个子项的 label 保持双语并排 (用户能从两种语言下都认出),
+        // 不调用 T(...).
+        MenuToggleSidebar.Header  = T("Toggle _Sidebar", "切换侧栏(_S)");
+        MenuBack.Header           = T("_Back",    "后退(_B)");
+        MenuForward.Header        = T("_Forward", "前进(_F)");
+
+        // ── Window ──
+        MenuWindow.Header              = T("_Window",              "窗口(_W)");
+        MenuWindowMin.Header           = T("_Minimize",            "最小化(_M)");
+        MenuWindowMaxRestore.Header    = T("_Maximize / Restore",  "最大化 / 还原(_M)");
+
+        // ── Help ──
+        MenuHelp.Header       = T("_Help",                    "帮助(_H)");
+        MenuHelpDocs.Header   = T("ITforce Markdown _Help",   "ITforce Markdown 帮助(_H)");
+        MenuHelpAbout.Header  = T("_About",                   "关于(_A)");
+    }
+
+    private void MenuLangSystem_Click(object sender, RoutedEventArgs e)  => Store.MenuLanguage = Models.MenuLanguage.System;
+    private void MenuLangEnglish_Click(object sender, RoutedEventArgs e) => Store.MenuLanguage = Models.MenuLanguage.English;
+    private void MenuLangChinese_Click(object sender, RoutedEventArgs e) => Store.MenuLanguage = Models.MenuLanguage.Chinese;
+
     private void ApplySidebarVisibility()
     {
         SidebarCol.Width = Store.IsSidebarHidden ? new GridLength(0) : new GridLength(280);
@@ -103,10 +187,11 @@ public partial class MainWindow : Window
     // ─────────────────── Open Recent dynamic menu ───────────────────
     private void BuildRecentMenu()
     {
+        var lang = Store.MenuLanguage;
         MenuRecent.Items.Clear();
         if (Store.RecentDocuments.Count == 0)
         {
-            var empty = new MenuItem { Header = "(empty)", IsEnabled = false };
+            var empty = new MenuItem { Header = L10n.T(lang, "(empty)", "(无)"), IsEnabled = false };
             MenuRecent.Items.Add(empty);
             return;
         }
@@ -122,7 +207,7 @@ public partial class MainWindow : Window
             MenuRecent.Items.Add(item);
         }
         MenuRecent.Items.Add(new Separator());
-        var clear = new MenuItem { Header = "Clear Menu" };
+        var clear = new MenuItem { Header = L10n.T(lang, "Clear Menu", "清除列表") };
         clear.Click += (_, _) => Store.ClearRecentDocuments();
         MenuRecent.Items.Add(clear);
     }

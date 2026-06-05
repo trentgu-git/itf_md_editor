@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using ITforceMarkdown.Models;
 using Markdig;
 using Markdig.Syntax;
@@ -13,13 +14,22 @@ namespace ITforceMarkdown.Engine;
 /// <summary>
 /// Markdown 引擎 — 对应 Mac 版 MarkdownEngine.swift。
 /// 用 Markdig 解析 CommonMark + GFM, 然后包一层 HTML 模板 (light/dark CSS).
+///
+/// 增强渲染管线 (Tier 1, 跟 Mac 端一致):
+///   - Mermaid: ```mermaid 代码块在 JS 端用 mermaid.run() 转 SVG
+///   - highlight.js: 给 <pre><code class="language-xxx"> 着色
+///   - KaTeX: 自动渲染 $...$ / $$...$$
+///   - GitHub callouts: > [!NOTE/TIP/IMPORTANT/WARNING/CAUTION] 渲染成彩色框
+///   - YAML front matter: 文件首 `---...---` 折成 &lt;details&gt;
+///   - 图片 / mermaid 点击放大 (event delegation in document.js)
 /// </summary>
 public static class MarkdownEngine
 {
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
-        .UseAdvancedExtensions()  // tables, task lists, autolinks, strikethrough, etc.
+        .UseAdvancedExtensions()  // tables, task lists, autolinks, strikethrough 等
         .UseAutoIdentifiers()      // h2/h3 自动生成 id, 用于锚点跳转
         .UseSoftlineBreakAsHardlineBreak()
+        .UseYamlFrontMatter()      // 文件首 --- 块识别为 YAML, 不当 hr
         .Build();
 
     // ─────────────────── 公开 API ───────────────────
@@ -57,11 +67,20 @@ public static class MarkdownEngine
 
     /// <summary>Pure HTML body (无 wrapper), 用于 export PDF / Word, 也作为 documentHTML 的内容部分。</summary>
     public static string RenderInnerHtml(string markdown)
-        => Markdown.ToHtml(markdown ?? "", Pipeline);
+    {
+        var (frontMatterHtml, body) = ExtractFrontMatter(markdown ?? "");
+        var bodyHtml = ConvertMermaidCodeBlocks(body);
+        bodyHtml = Markdown.ToHtml(bodyHtml, Pipeline);
+        bodyHtml = TransformCallouts(bodyHtml);
+        return frontMatterHtml + bodyHtml;
+    }
 
     /// <summary>
     /// 给 WebView 用的完整 HTML — 嵌好暗黑 / 亮色 CSS, 支持 contenteditable。
     /// 跟 Mac 版 documentHTML 同名同行为。
+    ///
+    /// 把 mermaid / highlight.js / KaTeX 的 JS+CSS 全部以 inline &lt;script&gt;/&lt;style&gt;
+    /// 嵌入, document.js 里调用对应 API. 这样 WebView2 完全离线可渲染.
     /// </summary>
     public static string DocumentHtml(string markdown, bool editable, AppearancePreference appearance)
     {
@@ -77,12 +96,15 @@ public static class MarkdownEngine
         var js  = LoadEmbedded("document.js");
         var escaped = EscapeForJsTemplate(inner);
 
+        var libsHead = LibraryAssetsHead();
+
         return $"""
 <!doctype html>
 <html{htmlClass}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{libsHead}
 <style>{css}</style>
 </head>
 <body>
@@ -100,25 +122,38 @@ doc.innerHTML = `{escaped}`;
     public enum PrintTarget { Pdf, Word }
 
     /// <summary>
-    /// 给 PDF / Word 导出用的打印友好版 HTML — 不含 contenteditable / JS。
-    /// PDF: 用 pt 单位, body padding 控制页边距 (WebView2 PrintToPdfAsync 不识 @page margin)。
-    /// Word: 用 px 单位, body padding=0, 让 @page margin 接管。
+    /// 给 PDF / Word 导出用的打印友好版 HTML。
+    /// PDF: 用 pt 单位 + body padding 控制页边距, 同时也嵌渲染库 (mermaid/hljs/KaTeX),
+    ///      WebView2.PrintToPdfAsync 加载后 JS 会跑, mermaid 会变 SVG.
+    /// Word: 用 px 单位, body padding=0; *不* 嵌库 (textutil 不跑 JS),
+    ///       mermaid 源码块被换成 [Mermaid diagram] 占位符 (Mac 端同样做法).
     /// </summary>
     public static string PrintHtml(string markdown, string title, PrintTarget target)
     {
-        var inner = RenderInnerHtml(markdown);
+        var (frontMatterHtml, body) = ExtractFrontMatter(markdown ?? "");
+        var bodyForRender = ConvertMermaidCodeBlocks(body);
+        var inner = Markdown.ToHtml(bodyForRender, Pipeline);
+        inner = TransformCallouts(inner);
+        inner = frontMatterHtml + inner;
+
         var safeTitle = System.Net.WebUtility.HtmlEncode(string.IsNullOrEmpty(title) ? "Document" : title);
-        string unit, bodyPadding;
+        string unit, bodyPadding, libsHead, initScript;
         switch (target)
         {
             case PrintTarget.Pdf:
                 unit = "pt";
                 bodyPadding = "body { margin: 0; padding: 96px; }";
+                libsHead = LibraryAssetsHead();
+                initScript = PrintInitScript;
                 break;
             case PrintTarget.Word:
             default:
                 unit = "px";
                 bodyPadding = "body { margin: 0; padding: 0; }";
+                libsHead = "";
+                initScript = "";
+                // Word 不能渲染 mermaid (textutil/OpenXml 不跑 JS), 换占位符.
+                inner = StripMermaidForWord(inner);
                 break;
         }
 
@@ -130,6 +165,7 @@ doc.innerHTML = `{escaped}`;
 <head>
 <meta charset="utf-8">
 <title>{safeTitle}</title>
+{libsHead}
 <style>
 {css}
 {bodyPadding}
@@ -137,12 +173,77 @@ doc.innerHTML = `{escaped}`;
 </head>
 <body>
 {inner}
+{initScript}
 </body>
 </html>
 """;
     }
 
-    // ─────────────────── 内部工具 ───────────────────
+    // ─────────────────── 内部: 资源加载 ───────────────────
+
+    /// <summary>Mermaid + highlight.js + KaTeX 的 &lt;script&gt;/&lt;style&gt; 头, 给 head 注入用.</summary>
+    private static string LibraryAssetsHead()
+    {
+        var mermaid       = LoadEmbedded("mermaid.min.js");
+        var hljs          = LoadEmbedded("highlight.min.js");
+        var hljsCss       = LoadEmbedded("github.min.css");
+        var katex         = LoadEmbedded("katex.min.js");
+        var katexAuto     = LoadEmbedded("katex-auto-render.min.js");
+        var katexCss      = LoadEmbedded("katex.min.css");
+        // 防止任何内嵌 </script> / </style> 提前终止外层标签
+        string SafeScript(string js) => js.Replace("</script>", "<\\/script>");
+        string SafeStyle(string css) => css.Replace("</style>", "<\\/style>");
+
+        return $"""
+<style>{SafeStyle(hljsCss)}</style>
+<style>{SafeStyle(katexCss)}</style>
+<script>{SafeScript(mermaid)}</script>
+<script>{SafeScript(hljs)}</script>
+<script>{SafeScript(katex)}</script>
+<script>{SafeScript(katexAuto)}</script>
+""";
+    }
+
+    /// <summary>
+    /// PDF 导出时塞进 body 末尾的脚本: mermaid.run + hljs + KaTeX, 完成后置
+    /// window.__exportReady = true. Exporter 那边可以等这个 flag 再 PrintToPdfAsync.
+    /// </summary>
+    private const string PrintInitScript = """
+<script>
+(async function () {
+  try {
+    if (window.mermaid && window.mermaid.run) {
+      window.mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+      const nodes = document.querySelectorAll('div.mermaid:not([data-processed="true"])');
+      if (nodes.length) await window.mermaid.run({ nodes });
+    }
+    if (window.hljs && window.hljs.highlightElement) {
+      document.querySelectorAll('pre code').forEach(function (el) {
+        try { window.hljs.highlightElement(el); } catch (e) {}
+      });
+    }
+    if (window.renderMathInElement) {
+      try {
+        window.renderMathInElement(document.body, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true  },
+            { left: '\\[', right: '\\]', display: true  },
+            { left: '$',  right: '$',  display: false },
+            { left: '\\(', right: '\\)', display: false }
+          ],
+          throwOnError: false,
+          ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+        });
+      } catch (e) {}
+    }
+  } catch (e) {
+    console.error('print render error:', e);
+  } finally {
+    window.__exportReady = true;
+  }
+})();
+</script>
+""";
 
     /// <summary>读取嵌入式资源 (Engine/Resources/*.css|*.js)。</summary>
     private static string LoadEmbedded(string filename)
@@ -156,6 +257,97 @@ doc.innerHTML = `{escaped}`;
         return reader.ReadToEnd();
     }
 
+    // ─────────────────── 内部: Markdown 预处理 / HTML 后处理 ───────────────────
+
+    /// <summary>
+    /// 提取 YAML front matter (文件首 ---...---), 转成 &lt;details&gt; 块, 返回
+    /// (frontMatterHtml, 剩余 markdown 文本). 没有 front matter 时返回 ("", original).
+    /// </summary>
+    private static (string frontMatterHtml, string remainingMarkdown) ExtractFrontMatter(string markdown)
+    {
+        if (string.IsNullOrEmpty(markdown)) return ("", markdown);
+        var lines = markdown.Split('\n');
+        if (lines.Length < 3) return ("", markdown);
+        if (lines[0].TrimEnd('\r').Trim() != "---") return ("", markdown);
+        int endIdx = -1;
+        for (int i = 1; i < lines.Length; i++)
+        {
+            if (lines[i].TrimEnd('\r').Trim() == "---") { endIdx = i; break; }
+        }
+        if (endIdx <= 1) return ("", markdown);
+        var yaml = string.Join("\n", lines, 1, endIdx - 1);
+        var escapedYaml = System.Net.WebUtility.HtmlEncode(yaml);
+        var html = $"<details class=\"front-matter\"><summary>front matter</summary><pre>{escapedYaml}</pre></details>\n";
+        var rest = string.Join("\n", lines, endIdx + 1, lines.Length - endIdx - 1);
+        return (html, rest);
+    }
+
+    /// <summary>
+    /// 把 ```mermaid 代码块替换成 &lt;div class="mermaid"&gt; 容器, mermaid.js 才能渲染.
+    /// Markdig 默认把它当代码块, 我们要在解析前 hijack.
+    /// </summary>
+    private static readonly Regex MermaidCodeFence = new(
+        @"```mermaid\s*\n(.*?)\n```",
+        RegexOptions.Singleline | RegexOptions.Compiled);
+
+    private static string ConvertMermaidCodeBlocks(string markdown)
+    {
+        return MermaidCodeFence.Replace(markdown, m =>
+        {
+            var inner = System.Net.WebUtility.HtmlEncode(m.Groups[1].Value);
+            // 用 HTML block 形式塞回 markdown, Markdig 会原样保留 (pass-through).
+            return $"\n\n<div class=\"mermaid\">{inner}</div>\n\n";
+        });
+    }
+
+    /// <summary>
+    /// GitHub callout 后处理: blockquote 第一行是 [!NOTE]/[!TIP]/[!IMPORTANT]/
+    /// [!WARNING]/[!CAUTION] 时, 加 callout-xxx class + 标题图标.
+    /// </summary>
+    private static readonly Regex CalloutPattern = new(
+        @"<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*/?>\s*)?(.*?)</p>(.*?)</blockquote>",
+        RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static string TransformCallouts(string html)
+    {
+        return CalloutPattern.Replace(html, m =>
+        {
+            var kind = m.Groups[1].Value.ToLowerInvariant();
+            var firstLine = m.Groups[2].Value.Trim();
+            var rest = m.Groups[3].Value.Trim();
+            var title = char.ToUpper(kind[0]) + kind.Substring(1);
+            var icon = kind switch
+            {
+                "note"      => "ℹ",
+                "tip"       => "💡",
+                "important" => "❗",
+                "warning"   => "⚠",
+                "caution"   => "⛔",
+                _ => ""
+            };
+            var body = string.IsNullOrEmpty(firstLine)
+                ? rest
+                : $"<p>{firstLine}</p>{rest}";
+            return $"<blockquote class=\"callout callout-{kind}\"><div class=\"callout-title\">{icon} {title}</div>{body}</blockquote>";
+        });
+    }
+
+    /// <summary>
+    /// Word 导出: 把 &lt;div class="mermaid"&gt; 整段换成 [Mermaid diagram] 占位符.
+    /// textutil / OpenXml 都不能渲染 inline SVG, 留 mermaid 块只会变成乱码文本.
+    /// </summary>
+    private static readonly Regex MermaidDivPattern = new(
+        @"<div\s+class=""mermaid""[^>]*>.*?</div>",
+        RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static string StripMermaidForWord(string html)
+    {
+        return MermaidDivPattern.Replace(html,
+            "<p style=\"color:#999;font-style:italic\">[Mermaid diagram]</p>");
+    }
+
+    // ─────────────────── 内部: 工具 ───────────────────
+
     private static string Slug(string title)
     {
         var sb = new StringBuilder();
@@ -164,7 +356,7 @@ doc.innerHTML = `{escaped}`;
             if (char.IsLetterOrDigit(ch)) sb.Append(ch);
             else sb.Append('-');
         }
-        var collapsed = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), "-+", "-").Trim('-');
+        var collapsed = Regex.Replace(sb.ToString(), "-+", "-").Trim('-');
         return string.IsNullOrEmpty(collapsed) ? "section" : collapsed;
     }
 
