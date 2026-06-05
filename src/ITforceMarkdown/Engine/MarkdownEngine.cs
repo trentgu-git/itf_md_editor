@@ -181,26 +181,33 @@ doc.innerHTML = `{escaped}`;
 
     // ─────────────────── 内部: 资源加载 ───────────────────
 
-    /// <summary>Mermaid + highlight.js + KaTeX 的 &lt;script&gt;/&lt;style&gt; 头, 给 head 注入用.</summary>
+    /// <summary>
+    /// Mermaid + highlight.js + KaTeX 的 &lt;script&gt;/&lt;link&gt; 头.
+    ///
+    /// 走 virtual host (https://app.local/...) 而不是 inline — mermaid.min.js
+    /// 单文件 3.3MB, 全 inline 进 HTML 会超过 WebView2.NavigateToString 的
+    /// 2MB 上限, 直接 "Value does not fall within the expected range" 崩.
+    /// 文件在应用启动时由 WebView2Host.ExtractEmbeddedAssets 解压到
+    /// %LOCALAPPDATA%\ITforceMarkdown\Assets\, 通过 SetVirtualHostNameTo
+    /// FolderMapping 暴露成 https URL.
+    /// </summary>
     private static string LibraryAssetsHead()
     {
-        var mermaid       = LoadEmbedded("mermaid.min.js");
-        var hljs          = LoadEmbedded("highlight.min.js");
-        var hljsCss       = LoadEmbedded("github.min.css");
-        var katex         = LoadEmbedded("katex.min.js");
-        var katexAuto     = LoadEmbedded("katex-auto-render.min.js");
-        var katexCss      = LoadEmbedded("katex.min.css");
-        // 防止任何内嵌 </script> / </style> 提前终止外层标签
-        string SafeScript(string js) => js.Replace("</script>", "<\\/script>");
-        string SafeStyle(string css) => css.Replace("</style>", "<\\/style>");
+        // WebView2Host.AssetsUrl(filename) 拼出 https://app.local/<filename>
+        var hljsCss   = Services.WebView2Host.AssetsUrl("github.min.css");
+        var katexCss  = Services.WebView2Host.AssetsUrl("katex.min.css");
+        var mermaid   = Services.WebView2Host.AssetsUrl("mermaid.min.js");
+        var hljs      = Services.WebView2Host.AssetsUrl("highlight.min.js");
+        var katex     = Services.WebView2Host.AssetsUrl("katex.min.js");
+        var katexAuto = Services.WebView2Host.AssetsUrl("katex-auto-render.min.js");
 
         return $"""
-<style>{SafeStyle(hljsCss)}</style>
-<style>{SafeStyle(katexCss)}</style>
-<script>{SafeScript(mermaid)}</script>
-<script>{SafeScript(hljs)}</script>
-<script>{SafeScript(katex)}</script>
-<script>{SafeScript(katexAuto)}</script>
+<link rel="stylesheet" href="{hljsCss}">
+<link rel="stylesheet" href="{katexCss}">
+<script src="{mermaid}"></script>
+<script src="{hljs}"></script>
+<script src="{katex}"></script>
+<script src="{katexAuto}"></script>
 """;
     }
 

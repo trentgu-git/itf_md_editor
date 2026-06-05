@@ -52,6 +52,10 @@ public static class Exporter
             // 复用主 WebView 同一个 environment, 避免 "different environment" 报错。
             var env = await WebView2Host.GetEnvironmentAsync();
             await wv.EnsureCoreWebView2Async(env);
+            // virtual host 映射 mermaid/hljs/KaTeX 库 (跟 MarkdownPreview 一致),
+            // 让 print HTML 能 <script src="https://app.local/..."> 引用大文件,
+            // 不撑爆 NavigateToString 的 2MB 上限.
+            WebView2Host.RegisterVirtualHost(wv.CoreWebView2);
 
             var html = MarkdownEngine.PrintHtml(markdown, Path.GetFileNameWithoutExtension(suggestedName),
                                                 MarkdownEngine.PrintTarget.Pdf);

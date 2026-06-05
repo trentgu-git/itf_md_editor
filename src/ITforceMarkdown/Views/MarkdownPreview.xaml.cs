@@ -60,6 +60,10 @@ public partial class MarkdownPreview : UserControl
             var env = await WebView2Host.GetEnvironmentAsync();
             await WebView.EnsureCoreWebView2Async(env);
 
+            // 注册 virtual host — HTML 里走 https://app.local/mermaid.min.js
+            // 等 URL, 避免把 3.3MB mermaid.js inline 进 NavigateToString
+            // (2MB 上限会撑爆, 报 "Value does not fall within the expected range").
+            WebView2Host.RegisterVirtualHost(WebView.CoreWebView2);
             WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             WebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
             WebView.CoreWebView2.WebMessageReceived += OnWebMessage;
